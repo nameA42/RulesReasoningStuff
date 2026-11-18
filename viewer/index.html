@@ -1,0 +1,1387 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rule Reasoning Viewer</title>
+<style>
+:root{
+  --bg:#f6f6f4; --panel:#ffffff; --panel2:#fafaf8; --ink:#1c1c1e; --muted:#6c6c72; --faint:#9a9aa0;
+  --line:#e2e2de; --line2:#ececea; --accent:#3563d6; --accent-soft:#e7edfb; --code:#f3f3f0;
+  --add:#e3f4e6; --add-ink:#1d6b34; --del:#fbe6e6; --del-ink:#9b2626; --warn:#fff4dc; --warn-ink:#7a5300;
+  --tab:#fde1e1; --sh:0 1px 2px rgba(0,0,0,.05),0 2px 8px rgba(0,0,0,.04);
+  --o-error:#d64545; --o-noeval:#a0a0a0; --o-dead:#8a63b8; --o-cap:#d1a73c; --o-mixedloss:#df8735;
+  --o-somewin:#79bd72; --o-allwin:#2f8f5b; --o-flatwin:#2b97a6;
+  --k-sec:#9b3fb0; --k-kw:#2a5bd0; --k-logic:#b8590c; --k-field:#0f7d6c; --k-com:#8a8a90;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#141416; --panel:#1d1e21; --panel2:#202125; --ink:#e7e7e4; --muted:#a0a0a6; --faint:#74747a;
+    --line:#2f3035; --line2:#28292d; --accent:#7ea2ff; --accent-soft:#22283a; --code:#18191c;
+    --add:#163221; --add-ink:#8fdaa4; --del:#3a1b1d; --del-ink:#f2a3a3; --warn:#3a2f14; --warn-ink:#f1d18a;
+    --tab:#4a1f22; --sh:0 1px 2px rgba(0,0,0,.4);
+    --k-sec:#d08ee0; --k-kw:#8fb0ff; --k-logic:#f0a868; --k-field:#5fd0bb; --k-com:#7c7c84;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#141416; --panel:#1d1e21; --panel2:#202125; --ink:#e7e7e4; --muted:#a0a0a6; --faint:#74747a;
+  --line:#2f3035; --line2:#28292d; --accent:#7ea2ff; --accent-soft:#22283a; --code:#18191c;
+  --add:#163221; --add-ink:#8fdaa4; --del:#3a1b1d; --del-ink:#f2a3a3; --warn:#3a2f14; --warn-ink:#f1d18a;
+  --tab:#4a1f22; --sh:0 1px 2px rgba(0,0,0,.4);
+  --k-sec:#d08ee0; --k-kw:#8fb0ff; --k-logic:#f0a868; --k-field:#5fd0bb; --k-com:#7c7c84;
+  color-scheme: dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;display:grid;grid-template-rows:auto 1fr;overflow:hidden}
+button,input,select,textarea{font:inherit;color:inherit}
+a{color:var(--accent);text-decoration:none;cursor:pointer}
+a:hover{text-decoration:underline}
+.mono,pre,code,kbd{font-family:ui-monospace,"Cascadia Code",Consolas,Menlo,monospace}
+.muted{color:var(--muted)} .faint{color:var(--faint)} .small{font-size:12px}
+h2{font-size:18px;margin:0} h3{font-size:13px;margin:0;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:600}
+
+/* header */
+header{display:flex;align-items:center;gap:14px;padding:8px 16px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
+.brand{font-weight:650;letter-spacing:-.01em;white-space:nowrap}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--panel2)}
+.seg button{border:0;background:transparent;padding:5px 11px;cursor:pointer;white-space:nowrap;border-right:1px solid var(--line)}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--accent);color:#fff}
+.tabs{display:flex;gap:2px}
+.tabs button{border:0;background:transparent;padding:6px 10px;border-radius:7px;cursor:pointer;color:var(--muted)}
+.tabs button.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.tabs button:hover{color:var(--ink)}
+.spacer{flex:1}
+.btn{border:1px solid var(--line);background:var(--panel2);padding:4px 10px;border-radius:7px;cursor:pointer}
+.btn:hover{border-color:var(--faint)}
+.btn.sm{padding:2px 8px;font-size:12px}
+#saveState{font-size:12px;color:var(--muted);white-space:nowrap}
+#saveState.local{color:var(--warn-ink)}
+
+main{overflow:hidden;min-height:0}
+.view{display:none;height:100%;overflow:auto}
+.view.on{display:block}
+#v-browse.on,#v-errors.on{display:grid}
+
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;box-shadow:var(--sh)}
+.pad{padding:16px 20px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:14px}
+
+/* outcome chips */
+.oc{--c:var(--o-noeval);display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:22px;padding:0 5px;border-radius:5px;background:var(--c);color:#fff;font-size:11.5px;font-weight:600;font-variant-numeric:tabular-nums;border:2px solid transparent;cursor:pointer;position:relative;user-select:none}
+.oc.error{--c:var(--o-error)} .oc.noeval{--c:var(--o-noeval)} .oc.dead{--c:var(--o-dead)} .oc.cap{--c:var(--o-cap);color:#2a2000}
+.oc.mixedloss{--c:var(--o-mixedloss)} .oc.somewin{--c:var(--o-somewin);color:#0d2a0d} .oc.allwin{--c:var(--o-allwin)} .oc.flatwin{--c:var(--o-flatwin)}
+.oc.none{background:transparent;border:1.5px dashed var(--faint);color:var(--faint)}
+.oc.dim{opacity:.28}
+.oc.sel{outline:2px solid var(--ink);outline-offset:1px}
+.oc.hasnote::after{content:"";position:absolute;top:-4px;right:-4px;width:8px;height:8px;border-radius:50%;background:var(--accent);border:1.5px solid var(--panel)}
+.swatch{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;margin-right:5px}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--muted)}
+
+/* overview */
+.kpis{display:flex;gap:22px;flex-wrap:wrap;margin:6px 0 12px}
+.kpi b{display:block;font-size:20px;font-weight:650;font-variant-numeric:tabular-nums}
+.kpi span{font-size:12px;color:var(--muted)}
+.bars{display:flex;gap:6px;align-items:flex-end;height:190px;padding-top:4px}
+.bar{flex:1;display:flex;flex-direction:column-reverse;height:100%;border-radius:4px;overflow:hidden;background:var(--line2)}
+.bar div{cursor:pointer;min-height:0;transition:filter .1s}
+.bar div:hover{filter:brightness(1.15) saturate(1.1)}
+.barlabels{display:flex;gap:6px;margin-top:4px}
+.barlabels span{flex:1;text-align:center;font-size:11px;color:var(--muted)}
+table.t{border-collapse:collapse;width:100%;font-size:12.5px}
+table.t th,table.t td{padding:4px 7px;border-bottom:1px solid var(--line2);text-align:left;vertical-align:top}
+table.t th{font-weight:600;color:var(--muted);font-size:11.5px;position:sticky;top:0;background:var(--panel)}
+table.t td.num,table.t th.num{text-align:right;font-variant-numeric:tabular-nums}
+table.t tr.click{cursor:pointer} table.t tr.click:hover td{background:var(--accent-soft)}
+td.heat{text-align:center;font-variant-numeric:tabular-nums;cursor:pointer;min-width:34px}
+td.heat:hover{outline:2px solid var(--accent);outline-offset:-2px}
+.sectiontitle{display:flex;align-items:baseline;gap:10px;margin:0 0 8px}
+.note-hint{font-size:12px;color:var(--muted);margin-top:6px}
+
+/* browse */
+#v-browse{grid-template-columns:310px minmax(0,1fr)}
+aside{border-right:1px solid var(--line);background:var(--panel);overflow:auto;display:flex;flex-direction:column;min-height:0}
+.filters{padding:10px 12px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:7px;position:sticky;top:0;background:var(--panel);z-index:2}
+.filters input[type=search],.filters select{width:100%;padding:5px 8px;border:1px solid var(--line);border-radius:7px;background:var(--panel2)}
+.frow{display:flex;gap:6px;align-items:center}
+.frow > *{flex:1;min-width:0}
+.ochips{display:flex;flex-wrap:wrap;gap:4px}
+.ochips .oc{min-width:0;padding:0 6px;font-weight:500;font-size:11px;height:20px}
+.ochips .oc.off{opacity:.35}
+.flist{padding:4px 0}
+.grow{display:flex;align-items:center;gap:8px;padding:5px 12px;cursor:pointer;border-left:3px solid transparent}
+.grow:hover{background:var(--panel2)}
+.grow.sel{background:var(--accent-soft);border-left-color:var(--accent)}
+.grow .nm{width:78px;flex:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
+.strip{display:flex;gap:2px}
+.strip .oc{min-width:19px;height:18px;font-size:10px;padding:0 2px;border-radius:4px;border-width:1.5px}
+.fcount{font-size:12px;color:var(--muted);display:flex;justify-content:space-between}
+#detail{overflow:auto;min-height:0;display:flex;flex-direction:column}
+.dbody{padding:14px 18px 10px;flex:1}
+.dhead{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.timeline{display:flex;gap:4px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px}
+.tl{display:flex;flex-direction:column;align-items:center;gap:2px}
+.tl small{font-size:10.5px;color:var(--muted)}
+.tl .oc{min-width:38px;height:26px;font-size:12px}
+.tl .arrow{color:var(--faint);font-size:11px;align-self:center;margin-top:14px}
+.revbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 12px;background:var(--panel);border:1px solid var(--line);border-radius:9px;margin-bottom:12px}
+.revbar .lbl{font-size:12px;color:var(--muted)}
+.cols{display:grid;grid-template-columns:repeat(var(--ncols,3),minmax(0,1fr));gap:12px;align-items:start}
+@media (max-width:1250px){.cols{grid-template-columns:minmax(0,1fr)}}
+.pane{background:var(--panel);border:1px solid var(--line);border-radius:10px;min-width:0}
+.pane > .ph{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line2);flex-wrap:wrap}
+.pane > .pb{padding:10px 12px}
+.banner{padding:7px 10px;border-radius:7px;font-size:12.5px;margin-bottom:8px}
+.banner.err{background:var(--del);color:var(--del-ink)}
+.banner.warn{background:var(--warn);color:var(--warn-ink)}
+.flag{display:inline-block;font-size:11px;padding:1px 7px;border-radius:10px;background:var(--warn);color:var(--warn-ink);margin:1px 2px;white-space:nowrap}
+.flag.bad{background:var(--del);color:var(--del-ink)}
+.code{font-size:12.3px;line-height:1.55;background:var(--code);border-radius:7px;padding:6px 0;overflow:auto;max-height:none}
+.code .l{display:flex;white-space:pre;min-height:1.55em}
+.code .n{flex:none;width:34px;text-align:right;padding-right:10px;color:var(--faint);user-select:none}
+.code .s{flex:none;width:14px;color:var(--faint);user-select:none}
+.code .c{flex:1;padding-right:10px}
+.code .l.add{background:var(--add)} .code .l.add .s{color:var(--add-ink)}
+.code .l.del{background:var(--del)} .code .l.del .s{color:var(--del-ink)} .code .l.del .c{opacity:.8}
+.code .hl-sec{color:var(--k-sec);font-weight:650}
+.code .hl-kw{color:var(--k-kw);font-weight:600}
+.code .hl-logic{color:var(--k-logic);font-weight:600}
+.code .hl-field{color:var(--k-field)}
+.code .hl-com{color:var(--k-com);font-style:italic}
+.code .tab{display:inline-block;width:4ch;color:var(--del-ink);background:var(--tab);border-radius:2px;font-size:10px;text-align:left}
+.md{font-size:13.5px;line-height:1.6;overflow-wrap:anywhere}
+.md p{margin:0 0 9px} .md ul,.md ol{margin:0 0 9px;padding-left:20px} .md li{margin:2px 0}
+.md h1,.md h2,.md h3,.md h4{font-size:14px;margin:12px 0 6px;text-transform:none;letter-spacing:0;color:var(--ink)}
+.md h1{font-size:16px}
+.md code{background:var(--code);padding:0 4px;border-radius:4px;font-size:12px}
+.md pre{background:var(--code);padding:8px 10px;border-radius:7px;overflow:auto;font-size:12px;white-space:pre}
+.md mark{background:#ffe48a;color:#000;border-radius:2px}
+.insight{border-left:3px solid var(--accent);background:var(--accent-soft);padding:8px 11px;border-radius:0 8px 8px 0;font-size:13px;margin-top:10px}
+.evtable{font-size:12px;width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.evtable td,.evtable th{padding:2px 6px;border-bottom:1px solid var(--line2);text-align:right}
+.evtable th{color:var(--muted);font-weight:600;font-size:11px}
+.evtable td:first-child,.evtable th:first-child{text-align:left}
+.pbar{display:inline-block;width:40px;height:6px;border-radius:3px;background:var(--line2);vertical-align:middle;margin-left:5px;overflow:hidden}
+.pbar i{display:block;height:100%;background:var(--accent)}
+.yes{color:var(--o-allwin);font-weight:700} .no{color:var(--faint)}
+.summary{font-size:12px;color:var(--muted);margin-top:6px}
+.hidebtns label{font-size:12px;color:var(--muted);display:inline-flex;gap:3px;align-items:center;margin-right:8px;cursor:pointer}
+
+/* notes dock */
+.dock{position:sticky;bottom:0;background:var(--panel);border-top:1px solid var(--line);padding:9px 18px 11px;box-shadow:0 -4px 14px rgba(0,0,0,.05);z-index:3}
+.dock.collapsed .dockbody{display:none}
+.dockhead{display:flex;align-items:center;gap:10px;font-size:12.5px}
+.dockbody{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:12px;margin-top:7px}
+@media (max-width:1000px){.dockbody{grid-template-columns:minmax(0,1fr)}}
+.dock textarea{width:100%;min-height:68px;resize:vertical;border:1px solid var(--line);border-radius:7px;padding:6px 8px;background:var(--panel2);font-size:13px;line-height:1.45}
+.dock textarea:focus,.filters input:focus,.tagin:focus-within{outline:2px solid var(--accent);outline-offset:-1px}
+.tagin{display:flex;flex-wrap:wrap;gap:4px;align-items:center;border:1px solid var(--line);border-radius:7px;padding:4px 6px;background:var(--panel2);min-height:32px}
+.tagin input{border:0;outline:0;background:transparent;flex:1;min-width:90px;font-size:12.5px}
+.tag{display:inline-flex;align-items:center;gap:3px;font-size:11.5px;padding:1px 8px;border-radius:10px;background:var(--accent-soft);color:var(--accent);white-space:nowrap;cursor:pointer;border:1px solid transparent}
+.tag.off{background:transparent;border:1px dashed var(--line);color:var(--muted)}
+.tag.off:hover{border-color:var(--accent);color:var(--accent)}
+.tag x{cursor:pointer;opacity:.6;font-style:normal} .tag x:hover{opacity:1}
+.tagsugg{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+
+/* errors view */
+#v-errors{grid-template-columns:380px minmax(0,1fr)}
+.elist .eitem{padding:9px 14px;border-bottom:1px solid var(--line2);cursor:pointer;border-left:3px solid transparent}
+.elist .eitem:hover{background:var(--panel2)}
+.elist .eitem.sel{background:var(--accent-soft);border-left-color:var(--accent)}
+.elist .eitem .et{font-size:12.8px;font-weight:550;line-height:1.35}
+.elist .eitem .em{display:flex;gap:10px;font-size:11.5px;color:var(--muted);margin-top:3px;align-items:center}
+.minib{display:inline-flex;gap:1px;align-items:flex-end;height:16px}
+.minib i{width:5px;background:var(--o-error);border-radius:1px;opacity:.85}
+.listhead{padding:10px 14px 6px;font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600;background:var(--panel2);border-bottom:1px solid var(--line2)}
+.fate{display:flex;height:22px;border-radius:5px;overflow:hidden;margin:6px 0 4px}
+.fate div{display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;font-weight:600;min-width:0;overflow:hidden;white-space:nowrap}
+
+/* notes view */
+.ncard{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin-bottom:8px;cursor:pointer}
+.ncard:hover{border-color:var(--accent)}
+.ncard .nh{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12.5px;margin-bottom:4px}
+.ncard .nt{white-space:pre-wrap;font-size:13.5px}
+
+/* modal */
+#modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:50;padding:24px}
+#modal.on{display:flex}
+#modal .mbox{background:var(--panel);border-radius:12px;max-width:920px;width:100%;max-height:88vh;overflow:auto;padding:18px 22px;box-shadow:0 10px 40px rgba(0,0,0,.3)}
+kbd{border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:0 5px;font-size:11.5px;background:var(--panel2)}
+.keys td{padding:3px 10px 3px 0}
+.empty{padding:40px;text-align:center;color:var(--muted)}
+
+/* play view */
+#v-play.on{display:grid;grid-template-columns:minmax(0,1fr) 360px}
+@media (max-width:1100px){#v-play.on{grid-template-columns:minmax(0,1fr)}}
+.board{overflow:auto;min-height:0;padding:14px 18px;background:color-mix(in srgb, var(--o-allwin) 7%, var(--bg))}
+.pside{border-left:1px solid var(--line);background:var(--panel);overflow:auto;min-height:0;padding:12px 14px;display:flex;flex-direction:column;gap:12px}
+.ptop{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.ptop input{width:80px;padding:3px 6px;border:1px solid var(--line);border-radius:6px;background:var(--panel2)}
+.pgroups{display:flex;flex-direction:column;gap:14px}
+.pgroup .gname{font-size:11px;font-weight:650;letter-spacing:.06em;color:var(--muted);margin-bottom:5px;text-transform:uppercase}
+.prow{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start}
+.pile{position:relative;width:var(--cw,66px);border-radius:7px;flex:none}
+.pile .slot{position:absolute;left:0;top:0;width:100%;height:calc(var(--cw,66px)*1.4);border:2px dashed var(--line);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--faint)}
+.pile.dest .slot,.pile.dest .crd:last-child{box-shadow:0 0 0 3px var(--o-allwin)}
+.pile.dest{cursor:pointer}
+.pile.hint .slot,.pile.hint .crd:last-child{box-shadow:0 0 0 3px var(--accent)}
+.crd{position:absolute;left:0;width:100%;height:calc(var(--cw,66px)*1.4);border-radius:5px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.35);cursor:pointer;user-select:none;-webkit-user-drag:none;display:block}
+.crd.sel{transform:translateY(-4px);box-shadow:0 0 0 3px var(--o-cap),0 4px 10px rgba(0,0,0,.3)}
+.crd.hintsrc{box-shadow:0 0 0 3px var(--accent)}
+.pile .tag{position:absolute;left:0;right:0;text-align:center;font-size:10px;color:var(--faint);white-space:nowrap;overflow:hidden}
+.drawrow{display:flex;gap:16px;align-items:flex-start;margin-bottom:16px}
+.drawinfo{font-size:11.5px;color:var(--muted);margin-top:4px;text-align:center}
+.expl{font-family:ui-monospace,Consolas,monospace;font-size:11.5px;white-space:pre-wrap;background:var(--code);border-radius:7px;padding:8px 10px;max-height:260px;overflow:auto;line-height:1.45}
+.expl .T{color:var(--o-allwin);font-weight:700} .expl .F{color:var(--o-error);font-weight:700}
+.alist{max-height:220px;overflow:auto;font-size:12px;font-family:ui-monospace,Consolas,monospace;border:1px solid var(--line2);border-radius:7px}
+.alist div{padding:3px 8px;cursor:pointer;border-bottom:1px solid var(--line2)}
+.alist div:hover{background:var(--accent-soft)}
+.winbanner{background:var(--o-allwin);color:#fff;padding:10px 14px;border-radius:9px;font-weight:650;text-align:center}
+.psec h3{margin-bottom:6px}
+.simt td,.simt th{padding:2px 6px;font-size:12px;text-align:right;border-bottom:1px solid var(--line2)}
+.simt th{color:var(--muted);font-weight:600}
+.simt td:first-child,.simt th:first-child{text-align:left}
+textarea.sgdled{width:100%;min-height:260px;font-family:ui-monospace,Consolas,monospace;font-size:12px;border:1px solid var(--line);border-radius:7px;padding:8px;background:var(--panel2);tab-size:4;white-space:pre}
+.btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn:disabled{opacity:.5;cursor:default}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">Rule Reasoning Viewer</div>
+  <div class="seg" id="runSeg"></div>
+  <nav class="tabs" id="tabs">
+    <button data-v="overview">Overview</button>
+    <button data-v="browse">Browse</button>
+    <button data-v="errors">Errors</button>
+    <button data-v="notes">Notes</button>
+    <button data-v="skill">Skill.md</button>
+    <button data-v="play">Play</button>
+  </nav>
+  <div class="spacer"></div>
+  <button class="btn sm" id="promptBtn" title="The shared system prompt the model saw">System prompt</button>
+  <button class="btn sm" id="themeBtn" title="Toggle light/dark">◐</button>
+  <button class="btn sm" id="helpBtn" title="Keyboard shortcuts (?)">?</button>
+  <span id="saveState">loading…</span>
+</header>
+<main>
+  <section class="view" id="v-overview"></section>
+  <section class="view" id="v-browse">
+    <aside id="sidebar"></aside>
+    <div id="detail"></div>
+  </section>
+  <section class="view" id="v-errors">
+    <aside id="errList" class="elist"></aside>
+    <div id="errDetail" style="overflow:auto;min-height:0"></div>
+  </section>
+  <section class="view" id="v-notes"></section>
+  <section class="view" id="v-skill"></section>
+  <section class="view" id="v-play"></section>
+</main>
+<div id="modal"><div class="mbox" id="mbox"></div></div>
+<input type="file" id="importFile" accept=".json" hidden>
+
+<script>
+"use strict";
+/* ---------- constants ---------- */
+const OUT = {
+  error:    {label:"Compile error"},
+  noeval:   {label:"No eval data"},
+  dead:     {label:"0 wins · proven unwinnable"},
+  cap:      {label:"0 wins · hit search cap"},
+  mixedloss:{label:"0 wins · mixed"},
+  somewin:  {label:"Some wins"},
+  allwin:   {label:"10/10 wins"},
+  flatwin:  {label:"10/10 wins, identical length"},
+  none:     {label:"Not evaluated"},
+};
+const ORDER = ["error","noeval","dead","cap","mixedloss","somewin","allwin","flatwin"];
+const DEFAULT_TAGS = ["interesting","prompt-mismatch","engine-bug","bad-diagnosis","good-fix","arithmetic","hallucinated-syntax","over-rewrite","degenerate-win"];
+const FLAG_HELP = {
+  "tabs":"File uses tab indentation. Every tab-indented file failed to parse.",
+  "deck short":"Pile counts in $initial add up to fewer cards than the deck.",
+  "deck over":"Pile counts add up to MORE cards than the deck (compiles anyway).",
+  "dup rule":"Two MOVE (or MOVE_STACK) rules share a source→destination pair.",
+  "DEAL draw as source":"A MOVE takes cards from a DEAL-type draw pile.",
+  "DRAW undefined":"DRAW is referenced but no DRAW pile is defined.",
+  "DRAW misuse":"DRAW used as a destination or as a MOVE_STACK source.",
+  "unchanged":"The model returned the file it was given without any change.",
+};
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const ocolor = o => `var(--o-${o})`;
+
+/* ---------- state ---------- */
+let D = null;
+const S = {
+  view:"overview", run:null, game:null, gen:1, outMode:"diff",
+  panes:{in:true, reason:true, out:true},
+  f:{q:"", deep:false, outcomes:new Set(), gen:"", err:"", flag:"", next:"", tag:"", noted:false},
+  sort:"name", errSel:null, errScope:"run", skillGen:1, skillDiff:true,
+  notesQ:"", notesTag:"", notesRun:"all", dockCollapsed:false,
+};
+let NOTES = {version:1, items:{}};
+let notesMode = "server";
+
+/* ---------- helpers ---------- */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const run = (k=S.run) => D.runs.find(r => r.key === k);
+const ent = (r, g, gen) => (r.games[g] || {})[gen] || null;
+const wins = e => e && e.rows ? e.rows.filter(x => x[1]).length : 0;
+const nextOf = e => ent(run(e.run), e.name, e.gen + 1);
+const nextOutcome = e => { const n = nextOf(e); return n ? n.outcome : "none"; };
+const flagKey = x => x.replace(/\s+\d+\/\d+$/, "").replace(/^dup rule .*/, "dup rule");
+const nkey = (r, g, gen) => `${r}|${g}|${gen}`;
+const note = k => NOTES.items[k] || null;
+const pct = (a, b) => b ? Math.round(100 * a / b) : 0;
+function chipText(e){
+  if (!e) return "–";
+  if (e.outcome === "error") return "✕";
+  if (e.outcome === "noeval") return "?";
+  return String(wins(e));
+}
+function chip(e, extra="", attrs=""){
+  const o = e ? e.outcome : "none";
+  const tip = e ? `g${e.gen} · ${OUT[o].label}${e.err ? " — " + e.err : ""}${e.summary ? "\n" + e.summary : ""}` : "Not evaluated";
+  return `<span class="oc ${o} ${extra}" title="${esc(tip)}" ${attrs}>${chipText(e)}</span>`;
+}
+function allEntries(r){ const out=[]; for (const g in r.games) for (const gen in r.games[g]) out.push(r.games[g][gen]); return out; }
+
+/* ---------- SGDL rendering ---------- */
+function hlLine(raw){
+  let line = raw, com = "";
+  const ci = line.indexOf("#");
+  if (ci >= 0){ com = line.slice(ci); line = line.slice(0, ci); }
+  let h = esc(line);
+  h = h.replace(/^(\s*)(\$\w+)/, '$1<span class="hl-sec">$2</span>')
+       .replace(/\b(MOVE_STACK|MOVE|DECK|DRAW|DEAL|ROTATE)\b/g, '<span class="hl-kw">$1</span>')
+       .replace(/\b(AND|OR)\b/g, '<span class="hl-logic">$1</span>')
+       .replace(/\b(DESTSRC|SRCSTACK|DEST|SRC|PILE)\b/g, '<span class="hl-field">$1</span>');
+  if (com) h += `<span class="hl-com">${esc(com)}</span>`;
+  return h.replace(/\t/g, '<span class="tab" title="tab character">⇥</span>');
+}
+function codeFull(text){
+  const lines = (text || "").replace(/\s+$/, "").split("\n");
+  return `<div class="code">${lines.map((l,i)=>`<div class="l"><span class="n">${i+1}</span><span class="c">${hlLine(l)}</span></div>`).join("")}</div>`;
+}
+function diffLines(a, b){
+  const n=a.length, m=b.length, dp=Array.from({length:n+1},()=>new Uint16Array(m+1));
+  for (let i=n-1;i>=0;i--) for (let j=m-1;j>=0;j--) dp[i][j] = a[i]===b[j] ? dp[i+1][j+1]+1 : Math.max(dp[i+1][j], dp[i][j+1]);
+  const out=[]; let i=0,j=0;
+  while (i<n && j<m){
+    if (a[i]===b[j]){ out.push([" ",a[i],j+1]); i++; j++; }
+    else if (dp[i+1][j] >= dp[i][j+1]) out.push(["-",a[i++],null]);
+    else { out.push(["+",b[j],j+1]); j++; }
+  }
+  while (i<n) out.push(["-",a[i++],null]);
+  while (j<m){ out.push(["+",b[j],j+1]); j++; }
+  return out;
+}
+function codeDiff(a, b){
+  const A=(a||"").replace(/\s+$/,"").split("\n"), B=(b||"").replace(/\s+$/,"").split("\n");
+  const d = diffLines(A, B);
+  const nAdd = d.filter(x=>x[0]==="+").length, nDel = d.filter(x=>x[0]==="-").length;
+  const html = d.map(([s,l,n]) => `<div class="l ${s==="+"?"add":s==="-"?"del":""}"><span class="n">${n??""}</span><span class="s">${s===" "?"":s}</span><span class="c">${hlLine(l)}</span></div>`).join("");
+  return {html:`<div class="code">${html}</div>`, nAdd, nDel};
+}
+
+/* ---------- light markdown ---------- */
+function inline(s, hi){
+  let h = esc(s);
+  h = h.replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>").replace(/(^|[^*])\*([^*\s][^*]*)\*/g, "$1<i>$2</i>");
+  if (hi) h = highlightTerm(h, hi);
+  return h;
+}
+function highlightTerm(html, term){
+  if (!term) return html;
+  const re = new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g,"\\$&"), "gi");
+  return html.replace(/(<[^>]+>)|([^<]+)/g, (m, tag, txt) => tag ? tag : txt.replace(re, x => `<mark>${x}</mark>`));
+}
+function md(text, hi){
+  const parts = String(text||"").split(/```(\w*)[^\n]*\n([\s\S]*?)```/g);
+  let out = "";
+  for (let p=0; p<parts.length; p+=3){
+    out += mdBlocks(parts[p], hi);
+    if (p+2 < parts.length) out += `<pre>${esc(parts[p+2])}</pre>`;
+  }
+  return out;
+}
+function mdBlocks(t, hi){
+  const lines = t.split("\n"); let out="", para=[], list=null;
+  const flushP = () => { if (para.length){ out += `<p>${inline(para.join(" "), hi)}</p>`; para=[]; } };
+  const flushL = () => { if (list){ out += `<${list.t}>${list.items.map(x=>`<li>${inline(x, hi)}</li>`).join("")}</${list.t}>`; list=null; } };
+  for (const raw of lines){
+    const l = raw.replace(/\s+$/,"");
+    let m;
+    if (!l.trim()){ flushP(); flushL(); continue; }
+    if ((m = l.match(/^(#{1,4})\s+(.*)/))){ flushP(); flushL(); out += `<h${m[1].length}>${inline(m[2], hi)}</h${m[1].length}>`; continue; }
+    if ((m = l.match(/^\s*[-*]\s+(.*)/))){ flushP(); if (!list || list.t!=="ul"){ flushL(); list={t:"ul",items:[]}; } list.items.push(m[1]); continue; }
+    if ((m = l.match(/^\s*\d+[.)]\s+(.*)/))){ flushP(); if (!list || list.t!=="ol"){ flushL(); list={t:"ol",items:[]}; } list.items.push(m[1]); continue; }
+    if (list && /^\s{2,}\S/.test(l)){ list.items[list.items.length-1] += " " + l.trim(); continue; }
+    flushL(); para.push(l.trim());
+  }
+  flushP(); flushL();
+  return out;
+}
+
+/* ---------- eval table ---------- */
+function evalTable(e){
+  if (!e) return `<div class="muted small">Not evaluated — the final generation's output was never simulated in these logs.</div>`;
+  if (e.err) return `<div class="banner err"><b>Compile error:</b> ${esc(e.err)}</div>`;
+  if (!e.rows.length) return `<div class="muted small">No evaluation data.</div>`;
+  const rows = e.rows.map(r => `<tr><td>${r[0]}</td><td class="${r[1]?"yes":"no"}">${r[1]?"Win":"—"}</td><td>${r[2]}</td><td>${r[3]?"yes":"<span class=faint>no</span>"}</td>
+    <td>${r[4].toFixed(1)}%<span class="pbar"><i style="width:${r[4]}%"></i></span></td><td>${r[5].toFixed(1)}%<span class="pbar"><i style="width:${r[5]}%"></i></span></td></tr>`).join("");
+  return `<table class="evtable"><tr><th>Deal</th><th>Win</th><th>Moves</th><th>Exhausted</th><th>Card use</th><th>Pile use</th></tr>${rows}</table>
+    <div class="summary">${esc(e.summary||"")}</div>`;
+}
+function flagsHtml(fl){ return fl.map(x => `<span class="flag ${["tabs","deck short","dup rule","DEAL draw as source","DRAW misuse","DRAW undefined"].includes(flagKey(x))?"bad":""}" title="${esc(FLAG_HELP[flagKey(x)]||"")}">${esc(x)}</span>`).join(""); }
+
+/* ---------- routing ---------- */
+function toHash(){
+  const p = new URLSearchParams();
+  p.set("v", S.view); p.set("run", S.run);
+  if (S.game) p.set("g", S.game);
+  p.set("gen", S.gen);
+  if (S.view==="errors" && S.errSel) p.set("err", S.errSel);
+  if (S.view==="skill") p.set("sg", S.skillGen);
+  if (S.view==="play" && PL.src){ p.set("ps", `${PL.src.run}|${PL.src.game}|${PL.src.gen}|${PL.src.which}`); if (PL.seed !== "") p.set("seed", PL.seed); }
+  const f=S.f;
+  if (f.q) p.set("q", f.q); if (f.deep) p.set("deep","1");
+  if (f.outcomes.size) p.set("o", [...f.outcomes].join(","));
+  for (const k of ["gen","err","flag","next","tag"]) if (f[k]) p.set("f"+k, f[k]);
+  if (f.noted) p.set("noted","1");
+  return "#" + p.toString();
+}
+function fromHash(){
+  const p = new URLSearchParams(location.hash.slice(1));
+  if (p.get("v")) S.view = p.get("v");
+  if (p.get("run") && run(p.get("run"))) S.run = p.get("run");
+  S.game = p.get("g") || S.game;
+  if (p.get("gen")) S.gen = +p.get("gen");
+  if (p.get("err")) S.errSel = p.get("err");
+  if (p.get("sg")) S.skillGen = +p.get("sg");
+  if (p.get("ps")){
+    const [r, g, gen, which] = p.get("ps").split("|");
+    const same = PL.src && PL.src.run===r && PL.src.game===g && PL.src.gen===+gen && PL.src.which===which;
+    if (!same && run(r) && ent(run(r), g, +gen)){ PL.pending = {src:{run:r, game:g, gen:+gen, which}, seed:p.get("seed") ?? ""}; }
+  }
+  const f = S.f;
+  f.q = p.get("q") || ""; f.deep = p.get("deep")==="1";
+  f.outcomes = new Set((p.get("o")||"").split(",").filter(Boolean));
+  for (const k of ["gen","err","flag","next","tag"]) f[k] = p.get("f"+k) || "";
+  f.noted = p.get("noted")==="1";
+}
+function nav(patch={}, push=true){
+  if (patch.f){ Object.assign(S.f, patch.f); delete patch.f; }
+  Object.assign(S, patch);
+  const h = toHash();
+  if (push && h !== location.hash) history.pushState(null, "", h); else history.replaceState(null, "", h);
+  render();
+}
+window.addEventListener("popstate", () => { fromHash(); render(); });
+function resetFilters(){ return {q:"", deep:false, outcomes:new Set(), gen:"", err:"", flag:"", next:"", tag:"", noted:false}; }
+function goBrowse(runKey, filt, game, gen){
+  const f = Object.assign(resetFilters(), filt||{});
+  if (filt && filt.outcomes) f.outcomes = new Set(filt.outcomes);
+  S.f = f;
+  const patch = {view:"browse", run:runKey};
+  if (game){ patch.game = game; patch.gen = gen || 1; }
+  else { const first = filteredGames(run(runKey))[0]; if (first){ patch.game = first.name; patch.gen = first.matchGens[0] || 1; } }
+  nav(patch);
+}
+
+/* ---------- render root ---------- */
+function render(){
+  document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("on", b.dataset.v === S.view));
+  document.querySelectorAll(".view").forEach(v => v.classList.toggle("on", v.id === "v-" + S.view));
+  $("#runSeg").innerHTML = D.runs.map(r => `<button data-run="${r.key}" class="${r.key===S.run?"on":""}" title="${esc(r.path)}">${esc(r.label)}</button>`).join("");
+  ({overview:renderOverview, browse:renderBrowse, errors:renderErrors, notes:renderNotes, skill:renderSkill, play:renderPlay})[S.view]();
+}
+
+/* ---------- overview ---------- */
+function runStats(r){
+  const es = allEntries(r);
+  const c = {}; ORDER.forEach(o=>c[o]=0); es.forEach(e => c[e.outcome]++);
+  const lastGen = r.gens[r.gens.length-1];
+  const last = es.filter(e=>e.gen===lastGen);
+  return {n:es.length, c, err:c.error, anyWin:c.somewin+c.allwin+c.flatwin,
+    lastWin: last.filter(e=>wins(e)>0).length, lastN:last.length, lastErr:last.filter(e=>e.outcome==="error").length};
+}
+function stackedBars(r){
+  const per = r.gens.map(g => { const c={}; ORDER.forEach(o=>c[o]=0); let n=0; for (const name in r.games){ const e=r.games[name][g]; if(e){c[e.outcome]++; n++;} } return {g,c,n}; });
+  const bars = per.map(({g,c,n}) => `<div class="bar">${ORDER.filter(o=>c[o]).map(o =>
+      `<div style="height:${100*c[o]/n}%;background:${ocolor(o)}" title="g${g} · ${OUT[o].label}: ${c[o]} of ${n}" data-act="bar" data-run="${r.key}" data-gen="${g}" data-o="${o}"></div>`).join("")}</div>`).join("");
+  return `<div class="bars">${bars}</div><div class="barlabels">${per.map(p=>`<span>g${p.g}</span>`).join("")}</div>`;
+}
+function legend(){ return `<div class="legend">${ORDER.map(o=>`<span><i class="swatch" style="background:${ocolor(o)}"></i>${OUT[o].label}</span>`).join("")}</div>`; }
+function renderOverview(){
+  const r = run();
+  let h = `<div class="pad">
+   <div class="sectiontitle"><h2>Outcome of each version, by generation</h2><span class="muted small">bar at g<i>N</i> = the version the model was handed at generation N (g1 = seed games). Click any segment to browse those revisions.</span></div>
+   ${legend()}
+   <div class="grid2" style="margin-top:10px">`;
+  for (const rr of D.runs){
+    const s = runStats(rr);
+    h += `<div class="card" ${rr.key===S.run?'style="border-color:var(--accent)"':""}>
+      <div class="sectiontitle"><h2 style="font-size:15px">${esc(rr.label)}</h2><span class="muted small mono">${esc(rr.path)}</span></div>
+      <div class="kpis">
+        <div class="kpi"><b>${Object.keys(rr.games).length}</b><span>games</span></div>
+        <div class="kpi"><b>${s.n}</b><span>revisions</span></div>
+        <div class="kpi"><b>${pct(s.err,s.n)}%</b><span>compile errors</span></div>
+        <div class="kpi"><b>${pct(s.anyWin,s.n)}%</b><span>versions with ≥1 win</span></div>
+        <div class="kpi"><b>${s.lastWin}/${s.lastN}</b><span>g${rr.gens[rr.gens.length-1]} with ≥1 win</span></div>
+      </div>
+      ${stackedBars(rr)}
+    </div>`;
+  }
+  h += `</div>`;
+
+  // error heatmap for selected run
+  const es = allEntries(r);
+  const ek = {}; es.filter(e=>e.errKey).forEach(e => { (ek[e.errKey] ||= {n:0, g:{}}); ek[e.errKey].n++; ek[e.errKey].g[e.gen] = (ek[e.errKey].g[e.gen]||0)+1; });
+  const keys = Object.keys(ek).sort((a,b)=>ek[b].n-ek[a].n);
+  const max = Math.max(1, ...keys.flatMap(k => Object.values(ek[k].g)));
+  h += `<div class="grid2" style="margin-top:14px">
+   <div class="card"><div class="sectiontitle"><h2 style="font-size:15px">Compile errors × generation</h2><span class="muted small">${esc(r.label)}</span></div>
+   <table class="t"><tr><th>Error</th>${r.gens.map(g=>`<th class="num">g${g}</th>`).join("")}<th class="num">Σ</th></tr>
+   ${keys.map(k => `<tr><td><a data-act="err" data-err="${esc(k)}">${esc(k)}</a></td>${r.gens.map(g => { const v = ek[k].g[g]||0;
+      return `<td class="heat" data-act="heat" data-err="${esc(k)}" data-gen="${g}" style="background:${v?`color-mix(in srgb, var(--o-error) ${15+70*v/max}%, transparent)`:"transparent"}">${v||""}</td>`; }).join("")}<td class="num"><b>${ek[k].n}</b></td></tr>`).join("") || `<tr><td class="muted">No compile errors</td></tr>`}
+   </table></div>`;
+
+  // auto-detected flags vs outcome
+  const fk = {};
+  es.forEach(e => e.inFlags.forEach(x => { const k = flagKey(x); (fk[k] ||= {n:0, err:0, errs:{}}); fk[k].n++; if (e.errKey){ fk[k].err++; fk[k].errs[e.errKey]=(fk[k].errs[e.errKey]||0)+1; } }));
+  const noFlagErr = es.filter(e => e.errKey && !e.inFlags.length).length;
+  h += `<div class="card"><div class="sectiontitle"><h2 style="font-size:15px">Auto-detected problems in the SGDL</h2><span class="muted small">static checks run on each version</span></div>
+   <table class="t"><tr><th>Check</th><th class="num">versions</th><th class="num">failed to compile</th><th>most common error</th></tr>
+   ${Object.keys(fk).sort((a,b)=>fk[b].n-fk[a].n).map(k => { const top = Object.entries(fk[k].errs).sort((a,b)=>b[1]-a[1])[0];
+     return `<tr class="click" data-act="flag" data-flag="${esc(k)}" title="${esc(FLAG_HELP[k]||"")}"><td><span class="flag ${k==="deck over"?"":"bad"}">${esc(k)}</span><div class="small muted">${esc(FLAG_HELP[k]||"")}</div></td><td class="num">${fk[k].n}</td><td class="num">${fk[k].err} <span class="muted">(${pct(fk[k].err,fk[k].n)}%)</span></td><td class="small">${top?esc(top[0]):"—"}</td></tr>`; }).join("")}
+   <tr><td class="muted">Errors with no check matching</td><td></td><td class="num">${noFlagErr}</td><td></td></tr>
+   </table>
+   ${(() => { const un = es.filter(e => e.outFlags.includes("unchanged")); const unErr = un.filter(e => e.err).length;
+      return un.length ? `<div class="note-hint"><a data-act="flag" data-flag="unchanged">${un.length} revisions returned the file unchanged</a> — ${unErr} of them were supposed to be fixing a compile error.</div>` : ""; })()}
+   </div></div>`;
+
+  // transition matrix
+  const T = {}; let tot = 0;
+  es.forEach(e => { const n = nextOf(e); if (!n) return; (T[e.outcome] ||= {}); T[e.outcome][n.outcome] = (T[e.outcome][n.outcome]||0)+1; tot++; });
+  const present = ORDER.filter(o => T[o] || Object.values(T).some(row => row[o]));
+  h += `<div class="card" style="margin-top:14px"><div class="sectiontitle"><h2 style="font-size:15px">What did one revision do? (outcome before → after)</h2><span class="muted small">${esc(r.label)} · ${tot} revisions with a next generation · row % · click a cell to browse</span></div>
+   <table class="t" style="width:auto"><tr><th>before \\ after</th>${present.map(o=>`<th class="num"><i class="swatch" style="background:${ocolor(o)}"></i>${esc(OUT[o].label)}</th>`).join("")}<th class="num">n</th></tr>
+   ${present.filter(o=>T[o]).map(o => { const row=T[o]; const n=Object.values(row).reduce((a,b)=>a+b,0);
+     return `<tr><td><i class="swatch" style="background:${ocolor(o)}"></i>${esc(OUT[o].label)}</td>${present.map(t => { const v=row[t]||0; const p=v/n;
+       return `<td class="heat" data-act="trans" data-from="${o}" data-to="${t}" style="background:${v?`color-mix(in srgb, var(--accent) ${8+60*p}%, transparent)`:"transparent"}" title="${v} of ${n}">${v?Math.round(100*p)+"%":""}<div class="small faint">${v||""}</div></td>`; }).join("")}<td class="num">${n}</td></tr>`; }).join("")}
+   </table></div></div>`;
+  $("#v-overview").innerHTML = h;
+}
+
+/* ---------- browse ---------- */
+function matchEntry(e){
+  const f = S.f;
+  if (f.gen && e.gen !== +f.gen) return false;
+  if (f.outcomes.size && !f.outcomes.has(e.outcome)) return false;
+  if (f.err && e.errKey !== f.err) return false;
+  if (f.flag && !(f.flag === "unchanged" ? e.outFlags.includes("unchanged") : e.inFlags.some(x => flagKey(x) === f.flag))) return false;
+  if (f.next && nextOutcome(e) !== f.next) return false;
+  const n = note(nkey(e.run, e.name, e.gen));
+  if (f.noted && !n) return false;
+  if (f.tag && !(n && n.tags.includes(f.tag))) return false;
+  if (f.q && f.deep){
+    const q = f.q.toLowerCase();
+    if (![e.reasoning, e.insight, e.in, e.out, e.err].some(s => s && s.toLowerCase().includes(q))) return false;
+  }
+  return true;
+}
+function filtersActive(){ const f=S.f; return f.outcomes.size||f.gen||f.err||f.flag||f.next||f.tag||f.noted||(f.q&&f.deep); }
+function filteredGames(r){
+  const out = [];
+  const nameQ = !S.f.deep && S.f.q ? S.f.q.toLowerCase() : "";
+  const active = filtersActive();
+  for (const name in r.games){
+    if (nameQ && !name.toLowerCase().includes(nameQ)) continue;
+    const gens = r.gens.filter(g => r.games[name][g] && (!active || matchEntry(r.games[name][g])));
+    if (active && !gens.length) continue;
+    const es = Object.values(r.games[name]);
+    out.push({name, matchGens:gens, idx:(r.games[name][1]||es[0]).idx, errs:es.filter(e=>e.err).length, wins:es.reduce((a,e)=>a+wins(e),0)});
+  }
+  const s = S.sort;
+  out.sort((a,b) => s==="idx" ? a.idx-b.idx : s==="errs" ? b.errs-a.errs || a.name.localeCompare(b.name) : s==="wins" ? b.wins-a.wins || a.name.localeCompare(b.name) : a.name.localeCompare(b.name));
+  return out;
+}
+function allTags(){
+  const c = {};
+  Object.values(NOTES.items).forEach(n => (n.tags||[]).forEach(t => c[t]=(c[t]||0)+1));
+  return c;
+}
+function renderSidebar(r, list){
+  const f = S.f, errKeys = [...new Set(allEntries(r).map(e=>e.errKey).filter(Boolean))].sort();
+  const flags = [...new Set(allEntries(r).flatMap(e=>e.inFlags.map(flagKey).concat(e.outFlags.includes("unchanged") ? ["unchanged"] : [])))].sort();
+  const tags = Object.keys(allTags()).sort();
+  const opt = (v, cur, label) => `<option value="${esc(v)}" ${v===cur?"selected":""}>${esc(label??v)}</option>`;
+  const active = filtersActive();
+  let h = `<div class="filters">
+    <input type="search" id="fq" placeholder="${f.deep?"Search reasoning, SGDL, errors…":"Filter game names…  ( / )"}" value="${esc(f.q)}">
+    <label class="small muted"><input type="checkbox" id="fdeep" ${f.deep?"checked":""}> search inside revisions (reasoning, SGDL, errors)</label>
+    <div class="ochips">${ORDER.map(o => `<span class="oc ${o} ${f.outcomes.size && !f.outcomes.has(o) ? "off":""}" data-fo="${o}" title="${esc(OUT[o].label)}">${esc(OUT[o].label.replace("0 wins · ","").replace("10/10 wins, identical length","10/10 flat"))}</span>`).join("")}</div>
+    <div class="frow"><select id="fgen">${opt("",f.gen,"Any generation")}${r.gens.map(g=>opt(String(g),f.gen,"Generation "+g)).join("")}</select>
+      <select id="fnext" title="Outcome of the model's revised version (next generation)">${opt("",f.next,"→ any result")}${ORDER.concat(["none"]).map(o=>opt(o,f.next,"→ "+OUT[o].label)).join("")}</select></div>
+    <select id="ferr">${opt("",f.err,"Any compile error / none")}${errKeys.map(k=>opt(k,f.err)).join("")}</select>
+    <div class="frow"><select id="fflag">${opt("",f.flag,"Any static check")}${flags.map(k=>opt(k,f.flag)).join("")}</select>
+      <select id="ftag">${opt("",f.tag,"Any tag")}${tags.map(k=>opt(k,f.tag,"#"+k)).join("")}</select></div>
+    <div class="fcount"><label><input type="checkbox" id="fnoted" ${f.noted?"checked":""}> has a note</label>
+      <span>sort <select id="fsort" style="width:auto;padding:1px 4px">${[["name","name"],["idx","seed order"],["errs","most errors"],["wins","most wins"]].map(([v,l])=>opt(v,S.sort,l)).join("")}</select></span></div>
+    <div class="fcount"><span>${list.length} game${list.length===1?"":"s"}${active?` · ${list.reduce((a,g)=>a+g.matchGens.length,0)} matching revisions`:""}</span>${active||f.q?`<a id="fclear">clear filters</a>`:""}</div>
+  </div><div class="flist">`;
+  for (const g of list){
+    const strip = r.gens.map(gen => { const e = r.games[g.name][gen]; const m = !active || g.matchGens.includes(gen);
+      const hn = note(nkey(r.key, g.name, gen)) ? "hasnote" : "";
+      return chip(e, `${m?"":"dim"} ${hn} ${g.name===S.game && gen===S.gen ? "sel":""}`, `data-g="${esc(g.name)}" data-gen="${gen}"`); }).join("");
+    h += `<div class="grow ${g.name===S.game?"sel":""}" data-g="${esc(g.name)}"><span class="nm" title="${esc(g.name)}">${esc(g.name)}${note(nkey(r.key,g.name,"game"))?' <span title="game note" style="color:var(--accent)">●</span>':""}</span><span class="strip">${strip}</span></div>`;
+  }
+  if (!list.length) h += `<div class="empty">No revisions match these filters.</div>`;
+  $("#sidebar").innerHTML = h + "</div>";
+}
+function renderBrowse(){
+  const r = run();
+  const list = filteredGames(r);
+  if (!S.game || !r.games[S.game] || (list.length && !list.some(x => x.name === S.game))){
+    S.game = list[0] ? list[0].name : Object.keys(r.games).sort()[0];
+    if (list[0] && list[0].matchGens.length) S.gen = list[0].matchGens[0];
+  }
+  if (!r.games[S.game][S.gen]) S.gen = r.gens[0];
+  const keepScroll = $("#sidebar").querySelector(".flist") ? $("#sidebar").scrollTop : 0;
+  renderSidebar(r, list);
+  $("#sidebar").scrollTop = keepScroll;
+  renderDetail(r);
+  const sel = $("#sidebar .grow.sel");
+  if (sel){ const sb=$("#sidebar"), top=sel.offsetTop, fh=$("#sidebar .filters").offsetHeight;
+    if (top < sb.scrollTop + fh || top > sb.scrollTop + sb.clientHeight - 30) sb.scrollTop = top - fh - 60; }
+}
+function renderDetail(r){
+  const g = S.game, e = ent(r, g, S.gen);
+  const nx = nextOf(e);
+  const hi = S.f.deep ? S.f.q : "";
+  const others = D.runs.filter(x => x.key !== r.key && x.games[g]);
+  const timeline = r.gens.map(gen => { const ee = r.games[g][gen]; const hn = note(nkey(r.key,g,gen)) ? "hasnote":"";
+      return `<div class="tl"><small>g${gen}</small>${chip(ee, `${gen===S.gen?"sel":""} ${hn}`, `data-gen="${gen}"`)}</div>`; }).join("")
+    + `<div class="tl"><small>g${r.gens[r.gens.length-1]} out</small>${chip(null)}</div>`;
+  const dw = nx && !nx.err && !e.err ? wins(nx) - wins(e) : null;
+  const skillNote = e.skillShown ? `<span class="flag" style="background:var(--accent-soft);color:var(--accent);cursor:pointer" data-act="skill" data-sg="${e.gen-1}" title="This prompt included the skill.md written after generation ${e.gen-1}">skill.md (g${e.gen-1}) shown</span>` : "";
+  const ncols = Object.values(S.panes).filter(Boolean).length || 1;
+  let outHtml, diffInfo = "";
+  if (S.outMode === "diff"){ const d = codeDiff(e.in, e.out); outHtml = d.html; diffInfo = `<span class="small"><span style="color:var(--add-ink)">+${d.nAdd}</span> <span style="color:var(--del-ink)">−${d.nDel}</span> lines</span>`; }
+  else outHtml = codeFull(e.out);
+  const flagsIn = e.inFlags.length ? flagsHtml(e.inFlags) : "";
+  const flagsOut = e.outFlags.length ? flagsHtml(e.outFlags) : "";
+  let h = `<div class="dbody">
+   <div class="dhead"><h2>${esc(g)}</h2><span class="muted small mono">${esc(e.file)}</span>${skillNote}
+     <span class="spacer"></span>
+     ${others.length ? `<span class="small muted">same game in:</span>${others.map(o=>`<a class="small" data-act="otherrun" data-run="${o.key}">${esc(o.label)}</a>`).join(" · ")}` : ""}
+   </div>
+   <div class="timeline">${timeline}</div>
+   <div class="revbar">
+     <span class="lbl">handed at g${e.gen}</span>${chip(e)}<span class="small">${esc(OUT[e.outcome].label)}</span>
+     <span class="faint">→ model revises →</span>
+     <span class="lbl">${nx ? `evaluated at g${nx.gen}` : "never evaluated"}</span>${chip(nx)}<span class="small">${nx ? esc(OUT[nx.outcome].label) : ""}${dw!==null && dw!==0 ? ` <b style="color:${dw>0?"var(--o-allwin)":"var(--o-error)"}">(${dw>0?"+":""}${dw} wins)</b>`:""}</span>
+     <span class="spacer" style="flex:1"></span>
+     <span class="hidebtns">${[["in","Input"],["reason","Reasoning"],["out","Output"]].map(([k,l])=>`<label><input type="checkbox" data-pane="${k}" ${S.panes[k]?"checked":""}>${l}</label>`).join("")}</span>
+   </div>
+   <div class="cols" style="--ncols:${ncols}">`;
+  if (S.panes.in) h += `<div class="pane"><div class="ph"><h3>Version handed to model</h3>${flagsIn}<span class="spacer" style="flex:1"></span><button class="btn sm" data-play="in" title="Play this version with the SolitaireGDL engine">▶ Play</button></div><div class="pb">
+       ${e.err ? `<div class="banner err"><b>Compile error:</b> ${esc(e.err)}</div>` : ""}
+       ${codeFull(e.in)}
+       <div style="margin-top:10px">${e.err ? "" : evalTable(e)}</div></div></div>`;
+  if (S.panes.reason) h += `<div class="pane"><div class="ph"><h3>Model reasoning</h3></div><div class="pb"><div class="md">${md(e.reasoning, hi) || '<span class="muted">(empty)</span>'}</div>
+       ${e.insight ? `<div class="insight"><div class="small muted" style="margin-bottom:3px">insight</div>${md(e.insight, hi)}</div>` : ""}</div></div>`;
+  if (S.panes.out) h += `<div class="pane"><div class="ph"><h3>Revised version</h3>
+       <span class="seg"><button data-om="diff" class="${S.outMode==="diff"?"on":""}">Diff</button><button data-om="full" class="${S.outMode==="full"?"on":""}">Full</button></span>${diffInfo}${flagsOut}<span class="spacer" style="flex:1"></span><button class="btn sm" data-play="out" title="Play the model's revised version with the SolitaireGDL engine">▶ Play</button></div>
+       <div class="pb">${outHtml}<div style="margin-top:10px"><div class="small muted" style="margin-bottom:4px">${nx?`Result when evaluated at g${nx.gen}:`:""}</div>${evalTable(nx)}</div></div></div>`;
+  h += `</div></div>`;
+  h += dockHtml(r, g, e);
+  $("#detail").innerHTML = h;
+  if (hi){ const m = $("#detail mark"); if (m) m.scrollIntoView({block:"center"}); }
+}
+
+/* ---------- notes dock ---------- */
+function dockHtml(r, g, e){
+  const k = nkey(r.key, g, e.gen), gk = nkey(r.key, g, "game");
+  const n = note(k) || {text:"", tags:[]}, gn = note(gk) || {text:"", tags:[]};
+  const counts = allTags();
+  const sugg = [...new Set([...Object.keys(counts).sort((a,b)=>counts[b]-counts[a]), ...DEFAULT_TAGS])].filter(t => !n.tags.includes(t)).slice(0, 12);
+  return `<div class="dock ${S.dockCollapsed?"collapsed":""}" id="dock">
+    <div class="dockhead"><b>Notes</b><span class="muted">${esc(g)} · g${e.gen} · ${esc(r.label)}</span><span class="spacer" style="flex:1"></span>
+      <span class="muted small"><kbd>n</kbd> to write · <kbd>Esc</kbd> to leave</span><a id="dockToggle">${S.dockCollapsed?"show ▲":"hide ▼"}</a></div>
+    <div class="dockbody">
+      <div><textarea id="noteText" data-k="${esc(k)}" placeholder="What's going on in this revision? (saved automatically)">${esc(n.text)}</textarea>
+        <div class="tagin" id="tagin" data-k="${esc(k)}">${n.tags.map(t=>`<span class="tag">#${esc(t)}<x data-rmtag="${esc(t)}">×</x></span>`).join("")}<input id="tagInput" list="tagList" placeholder="add tag, Enter"></div>
+        <datalist id="tagList">${Object.keys(counts).map(t=>`<option value="${esc(t)}">`).join("")}</datalist>
+        <div class="tagsugg">${sugg.map(t=>`<span class="tag off" data-addtag="${esc(t)}">+${esc(t)}</span>`).join("")}</div></div>
+      <div><div class="small muted" style="margin-bottom:3px">Game-level note (all generations of ${esc(g)})</div>
+        <textarea id="gameNote" data-k="${esc(gk)}" placeholder="Overall story of this game…" style="min-height:104px">${esc(gn.text)}</textarea></div>
+    </div></div>`;
+}
+let saveTimer = null;
+function setNote(k, patch){
+  const cur = NOTES.items[k] || {text:"", tags:[]};
+  const nn = Object.assign({}, cur, patch, {updated:new Date().toISOString()});
+  if (!nn.text.trim() && !(nn.tags||[]).length) delete NOTES.items[k]; else NOTES.items[k] = nn;
+  scheduleSave();
+}
+function scheduleSave(){
+  $("#saveState").textContent = "● saving…";
+  clearTimeout(saveTimer); saveTimer = setTimeout(saveNotes, 500);
+}
+async function saveNotes(){
+  try { localStorage.setItem("rrv-notes", JSON.stringify(NOTES)); } catch {}
+  if (notesMode === "server"){
+    try {
+      const res = await fetch("api/notes", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(NOTES)});
+      if (!res.ok) throw new Error(res.status);
+      $("#saveState").textContent = `✓ saved to notes.json (${Object.keys(NOTES.items).length})`; $("#saveState").className = "";
+      return;
+    } catch { notesMode = "local"; }
+  }
+  $("#saveState").textContent = "saved in this browser only — run serve.py to save to file"; $("#saveState").className = "local";
+}
+async function loadNotes(){
+  try {
+    const res = await fetch("api/notes", {cache:"no-store"});
+    if (!res.ok) throw new Error(res.status);
+    const j = await res.json();
+    if (!j.items) throw new Error("bad");
+    NOTES = j; notesMode = "server";
+    $("#saveState").textContent = `notes.json · ${Object.keys(NOTES.items).length} notes`;
+  } catch {
+    notesMode = "local";
+    try { const s = localStorage.getItem("rrv-notes"); if (s) NOTES = JSON.parse(s); } catch {}
+    $("#saveState").textContent = "notes: this browser only"; $("#saveState").className = "local";
+  }
+  for (const k in NOTES.items) NOTES.items[k].tags ||= [];
+}
+function refreshNoteMarkers(){
+  // re-render the sidebar strips + timeline dots without touching the textareas
+  if (S.view !== "browse") return;
+  const r = run();
+  const ae = document.activeElement, id = ae && ae.id, ss = ae && ae.selectionStart, se = ae && ae.selectionEnd;
+  const st = $("#sidebar").scrollTop;
+  renderSidebar(r, filteredGames(r)); $("#sidebar").scrollTop = st;
+  document.querySelectorAll("#detail .timeline .oc[data-gen]").forEach(c => c.classList.toggle("hasnote", !!note(nkey(r.key, S.game, +c.dataset.gen))));
+  if (id && $("#"+id)){ $("#"+id).focus(); try { $("#"+id).setSelectionRange(ss, se); } catch {} }
+}
+function addTag(k, t){
+  t = t.trim().replace(/^#/, "").replace(/\s+/g, "-").toLowerCase(); if (!t) return;
+  const n = note(k) || {text:"", tags:[]};
+  if (!n.tags.includes(t)) setNote(k, {tags:[...n.tags, t], text:n.text});
+  renderDetail(run()); refreshNoteMarkers(); $("#tagInput") && $("#tagInput").focus();
+}
+function rmTag(k, t){
+  const n = note(k); if (!n) return;
+  setNote(k, {tags:n.tags.filter(x=>x!==t), text:n.text});
+  renderDetail(run()); refreshNoteMarkers();
+}
+
+/* ---------- errors view ---------- */
+function errInstances(errKey){
+  const runs = S.errScope === "all" ? D.runs : [run()];
+  return runs.flatMap(r => allEntries(r).filter(e => e.errKey === errKey));
+}
+function renderErrors(){
+  const runs = S.errScope === "all" ? D.runs : [run()];
+  const all = runs.flatMap(r => allEntries(r));
+  const errs = all.filter(e => e.errKey);
+  const by = {};
+  errs.forEach(e => { (by[e.errKey] ||= []).push(e); });
+  const keys = Object.keys(by).sort((a,b) => by[b].length - by[a].length);
+  if (!S.errSel || !by[S.errSel]) S.errSel = keys[0] || null;
+  const gens = run().gens;
+  let h = `<div class="listhead" style="display:flex;justify-content:space-between;align-items:center">Compile errors · ${errs.length} of ${all.length} versions
+     <span class="seg" style="text-transform:none;letter-spacing:0"><button data-es="run" class="${S.errScope==="run"?"on":""}">this run</button><button data-es="all" class="${S.errScope==="all"?"on":""}">all runs</button></span></div>`;
+  for (const k of keys){
+    const es = by[k], max = Math.max(...gens.map(g => es.filter(e=>e.gen===g).length), 1);
+    const perRun = D.runs.map(r => `${r.label}: ${es.filter(e=>e.run===r.key).length}`).join(" · ");
+    h += `<div class="eitem ${k===S.errSel?"sel":""}" data-ek="${esc(k)}"><div class="et">${esc(k)}</div>
+      <div class="em"><b style="color:var(--ink)">${es.length}</b><span class="minib" title="per generation">${gens.map(g => `<i style="height:${2+14*es.filter(e=>e.gen===g).length/max}px" title="g${g}: ${es.filter(e=>e.gen===g).length}"></i>`).join("")}</span>
+      ${S.errScope==="all" ? `<span class="small">${esc(perRun)}</span>` : ""}</div></div>`;
+  }
+  if (!keys.length) h += `<div class="empty">No compile errors in this run.</div>`;
+  $("#errList").innerHTML = h;
+  renderErrDetail(S.errSel ? by[S.errSel] : []);
+}
+function streakOf(e){
+  const r = run(e.run); let s = 1, g = e.gen - 1;
+  while (ent(r, e.name, g) && ent(r, e.name, g).err){ s++; g--; }
+  return s;
+}
+function renderErrDetail(es){
+  if (!es.length){ $("#errDetail").innerHTML = `<div class="empty">Pick an error on the left.</div>`; return; }
+  const k = S.errSel;
+  const fate = {fixed:0, same:0, other:0, na:0};
+  const rows = es.map(e => {
+    const n = nextOf(e); let f = "na";
+    if (n) f = !n.err ? "fixed" : n.errKey === e.errKey ? "same" : "other";
+    fate[f]++;
+    return {e, n, f};
+  });
+  const tot = es.length;
+  const fateColors = {fixed:"var(--o-allwin)", same:"var(--o-error)", other:"var(--o-mixedloss)", na:"var(--o-noeval)"};
+  const fateLabels = {fixed:"fixed next gen", same:"same error again", other:"different error", na:"no next gen"};
+  const fc = {}; es.forEach(e => (e.inFlags.length ? e.inFlags.map(flagKey) : ["(no check matched)"]).forEach(x => fc[x] = (fc[x]||0)+1));
+  const raw = {}; es.forEach(e => raw[e.err] = (raw[e.err]||0)+1);
+  const rawList = Object.entries(raw).sort((a,b)=>b[1]-a[1]);
+  let h = `<div class="pad">
+    <h2 style="margin-bottom:4px">${esc(k)}</h2>
+    <div class="muted small">${tot} versions failed with this error${S.errScope==="all"?" across all runs":" in "+esc(run().label)}. Each row is a version handed to the model; its fix attempt is evaluated one generation later.</div>
+    <div class="grid2" style="margin-top:12px">
+     <div class="card"><h3>What the model's next revision did</h3>
+       <div class="fate">${Object.keys(fate).filter(f=>fate[f]).map(f=>`<div style="flex:${fate[f]};background:${fateColors[f]}" title="${fateLabels[f]}: ${fate[f]}">${pct(fate[f],tot)}%</div>`).join("")}</div>
+       <div class="legend">${Object.keys(fate).map(f=>`<span><i class="swatch" style="background:${fateColors[f]}"></i>${fateLabels[f]}: ${fate[f]}</span>`).join("")}</div></div>
+     <div class="card"><h3>Static checks on the failing files</h3><div style="margin-top:6px">${Object.entries(fc).sort((a,b)=>b[1]-a[1]).map(([f,c])=>`<div class="small"><span class="flag ${f.startsWith("(")?"":"bad"}" title="${esc(FLAG_HELP[f]||"")}">${esc(f)}</span> ${c} <span class="muted">(${pct(c,tot)}%)</span></div>`).join("")}</div></div>
+    </div>
+    ${rawList.length > 1 ? `<details style="margin-top:10px"><summary class="small muted" style="cursor:pointer">${rawList.length} distinct raw messages</summary><table class="t" style="margin-top:6px">${rawList.map(([m,c])=>`<tr><td class="mono small">${esc(m)}</td><td class="num">${c}</td></tr>`).join("")}</table></details>` : ""}
+    <div class="card" style="margin-top:12px;padding:0"><table class="t">
+     <tr><th>Game</th>${S.errScope==="all"?"<th>Run</th>":""}<th class="num">Gen</th><th>Checks</th>${rawList.length>1?"<th>Raw message</th>":""}<th class="num" title="consecutive generations failing to compile, ending here">Streak</th><th>Next gen</th><th>Note</th></tr>
+     ${rows.sort((a,b)=>a.e.run.localeCompare(b.e.run)||a.e.name.localeCompare(b.e.name)||a.e.gen-b.e.gen).map(({e,n,f}) => { const nt = note(nkey(e.run,e.name,e.gen));
+       return `<tr class="click" data-open="${esc(e.run)}|${esc(e.name)}|${e.gen}"><td><b>${esc(e.name)}</b></td>${S.errScope==="all"?`<td class="small">${esc(run(e.run).label)}</td>`:""}<td class="num">${e.gen}</td>
+       <td>${flagsHtml(e.inFlags)}${e.outFlags.includes("unchanged")?'<span class="flag" title="The model returned this file unchanged">then unchanged</span>':""}</td>${rawList.length>1?`<td class="small mono" style="max-width:340px">${esc(e.err)}</td>`:""}<td class="num">${streakOf(e)}</td>
+       <td>${chip(n)} <span class="small" style="color:${fateColors[f]}">${fateLabels[f]}</span></td><td class="small">${nt ? esc((nt.tags||[]).map(t=>"#"+t).join(" ") + " " + nt.text.slice(0,60)) : ""}</td></tr>`; }).join("")}
+    </table></div></div>`;
+  $("#errDetail").innerHTML = h;
+}
+
+/* ---------- notes view ---------- */
+function renderNotes(){
+  const items = Object.entries(NOTES.items).map(([k,n]) => { const [r,g,gen] = k.split("|"); return {k, r, g, gen, n}; });
+  const counts = allTags();
+  const q = S.notesQ.toLowerCase();
+  const list = items.filter(x => (S.notesRun==="all" || x.r===S.notesRun) && (!S.notesTag || x.n.tags.includes(S.notesTag)) && (!q || (x.n.text+" "+x.g+" "+x.n.tags.join(" ")).toLowerCase().includes(q)))
+    .sort((a,b) => (b.n.updated||"").localeCompare(a.n.updated||""));
+  let h = `<div class="pad" style="max-width:1000px">
+   <div class="sectiontitle"><h2>Notes</h2><span class="muted small">${items.length} total · ${notesMode==="server"?"stored in viewer/notes.json":"stored in this browser only"}</span><span class="spacer" style="flex:1"></span>
+     <button class="btn sm" id="expMd">Export Markdown</button><button class="btn sm" id="expJson">Export JSON</button><button class="btn sm" id="impJson">Import JSON</button></div>
+   <div class="frow" style="margin:8px 0 10px;max-width:640px"><input type="search" id="nq" placeholder="Search notes…" value="${esc(S.notesQ)}" style="padding:5px 8px;border:1px solid var(--line);border-radius:7px;background:var(--panel2)">
+     <select id="nrun" style="padding:5px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);flex:0 0 200px"><option value="all">All runs</option>${D.runs.map(r=>`<option value="${r.key}" ${S.notesRun===r.key?"selected":""}>${esc(r.label)}</option>`).join("")}</select></div>
+   <div class="tagsugg" style="margin-bottom:12px">${Object.keys(counts).sort((a,b)=>counts[b]-counts[a]).map(t=>`<span class="tag ${S.notesTag===t?"":"off"}" data-ntag="${esc(t)}">#${esc(t)} <span class="faint">${counts[t]}</span></span>`).join("") || '<span class="muted small">Tags you add to notes show up here.</span>'}
+     ${Object.keys(counts).length ? `<a class="small" data-act="browseTag" style="margin-left:8px">${S.notesTag?`browse revisions tagged #${esc(S.notesTag)} →`:""}</a>`:""}</div>`;
+  if (!list.length) h += `<div class="empty">${items.length ? "No notes match." : "No notes yet. Open Browse, pick a revision and press <kbd>n</kbd> to write one."}</div>`;
+  for (const x of list){
+    const r = run(x.r); if (!r) continue;
+    const e = x.gen === "game" ? null : ent(r, x.g, +x.gen);
+    h += `<div class="ncard" data-open="${esc(x.r)}|${esc(x.g)}|${x.gen==="game"?1:x.gen}">
+      <div class="nh"><b>${esc(x.g)}</b><span class="muted">${x.gen==="game"?"game note":"g"+x.gen}</span>${e?chip(e):""}${e && nextOf(e) ? "→"+chip(nextOf(e)) : ""}<span class="muted small">${esc(r.label)}</span>
+        ${x.n.tags.map(t=>`<span class="tag">#${esc(t)}</span>`).join("")}<span class="spacer" style="flex:1"></span><span class="faint small">${esc((x.n.updated||"").slice(0,16).replace("T"," "))}</span></div>
+      <div class="nt">${esc(x.n.text)}</div></div>`;
+  }
+  $("#v-notes").innerHTML = h + "</div>";
+}
+function download(name, text, type){
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([text], {type})); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+function exportMarkdown(){
+  const items = Object.entries(NOTES.items).map(([k,n]) => { const [r,g,gen] = k.split("|"); return {r,g,gen,n}; })
+    .sort((a,b) => a.r.localeCompare(b.r) || a.g.localeCompare(b.g) || (a.gen==="game"?-1:b.gen==="game"?1:a.gen-b.gen));
+  let md = `# Rule reasoning notes\n\nExported ${new Date().toISOString().slice(0,16).replace("T"," ")}\n`;
+  let lr = null, lg = null;
+  for (const x of items){
+    const r = run(x.r);
+    if (x.r !== lr){ md += `\n## ${r ? r.label : x.r}\n`; lr = x.r; lg = null; }
+    if (x.g !== lg){ md += `\n### ${x.g}\n`; lg = x.g; }
+    const e = r && x.gen !== "game" ? ent(r, x.g, +x.gen) : null;
+    const nx = e ? nextOf(e) : null;
+    const head = x.gen === "game" ? "Game note" : `g${x.gen} — ${e ? OUT[e.outcome].label + (e.err ? ` (${e.err})` : "") : ""}${nx ? ` → ${OUT[nx.outcome].label}` : ""}`;
+    md += `\n**${head}**${x.n.tags.length ? " " + x.n.tags.map(t=>"`#"+t+"`").join(" ") : ""}\n\n${x.n.text}\n`;
+  }
+  download("rule-reasoning-notes.md", md, "text/markdown");
+}
+
+/* ---------- skill view ---------- */
+function renderSkill(){
+  const r = run();
+  const gens = Object.keys(r.skills).map(Number).sort((a,b)=>a-b);
+  if (!gens.length){
+    $("#v-skill").innerHTML = `<div class="empty">The <b>${esc(r.label)}</b> run has no skill.md — the model only saw its own game each round.<br>Switch to a skill run at the top.</div>`;
+    return;
+  }
+  if (!gens.includes(S.skillGen)) S.skillGen = gens[0];
+  const sk = r.skills[S.skillGen], prev = r.skills[S.skillGen-1];
+  const ins = allEntries(r).filter(e => e.gen === S.skillGen && e.insight).sort((a,b)=>a.name.localeCompare(b.name));
+  const body = S.skillDiff && prev ? codeDiffPlain(prev.skill, sk.skill) : `<div class="md">${md(sk.skill)}</div>`;
+  $("#v-skill").innerHTML = `<div class="pad">
+    <div class="sectiontitle"><h2>skill.md</h2><span class="muted small">written after generation ${S.skillGen} from ${sk.nInsights ?? "?"} insights · shown to every model in generation ${S.skillGen+1}</span></div>
+    <div class="frow" style="justify-content:flex-start;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+      <span class="seg">${gens.map(g=>`<button data-sg="${g}" class="${g===S.skillGen?"on":""}">after g${g}</button>`).join("")}</span>
+      <label class="small muted" style="flex:0 0 auto"><input type="checkbox" id="skillDiff" ${S.skillDiff?"checked":""} ${prev?"":"disabled"}> show changes vs previous</label>
+    </div>
+    <div class="grid2" style="grid-template-columns:minmax(0,3fr) minmax(0,2fr)">
+      <div class="card">${body}
+        <details style="margin-top:12px"><summary class="small muted" style="cursor:pointer">Maintainer's reasoning for this rewrite</summary><div class="md" style="margin-top:6px">${md(sk.reasoning)}</div></details></div>
+      <div class="card"><h3 style="margin-bottom:8px">Insights written in generation ${S.skillGen} (${ins.length})</h3>
+        ${ins.map(e => `<div style="padding:7px 0;border-bottom:1px solid var(--line2)"><div class="small"><a data-open="${e.run}|${esc(e.name)}|${e.gen}"><b>${esc(e.name)}</b></a> ${chip(e)} → ${chip(nextOf(e))}</div><div class="md small" style="font-size:12.5px">${md(e.insight)}</div></div>`).join("") || '<div class="muted small">None.</div>'}
+      </div>
+    </div></div>`;
+}
+function codeDiffPlain(a, b){
+  const d = diffLines((a||"").split("\n"), (b||"").split("\n"));
+  return `<div class="code" style="white-space:normal">${d.map(([s,l]) => `<div class="l ${s==="+"?"add":s==="-"?"del":""}" style="white-space:pre-wrap"><span class="s">${s===" "?"":s}</span><span class="c" style="font-family:system-ui;font-size:13px">${esc(l)}</span></div>`).join("")}</div>`;
+}
+
+/* ---------- modal ---------- */
+function modal(html){ $("#mbox").innerHTML = html; $("#modal").classList.add("on"); }
+$("#modal").addEventListener("click", ev => { if (ev.target.id === "modal") $("#modal").classList.remove("on"); });
+$("#promptBtn").onclick = () => modal(`<div class="sectiontitle"><h2>System prompt</h2><span class="muted small">${esc(run().label)} · identical in every revision call</span></div><div class="md">${md(run().system)}</div>`);
+$("#helpBtn").onclick = () => showHelp();
+function showHelp(){
+  modal(`<h2 style="margin-bottom:10px">Keyboard shortcuts</h2><table class="keys">
+   ${[["← / →  or  h / l","previous / next generation"],["↑ / ↓  or  k / j","previous / next game in the filtered list"],["n","write a note on this revision"],["t","add a tag"],["d","toggle Diff / Full for the revised version"],["/","focus the search box"],["Esc","leave a text box / close dialog"],["1 – 5","Overview · Browse · Errors · Notes · Skill.md"],["?","this help"]]
+     .map(([k,d])=>`<tr><td><kbd>${k}</kbd></td><td>${d}</td></tr>`).join("")}</table>
+   <h3 style="margin:16px 0 6px">Reading the chips</h3>
+   <p class="small">Each chip is one version of a game. The number is how many of the 10 simulated deals were won; ✕ means it failed to compile. A blue dot means you've left a note.
+   The chip at g<i>N</i> is the version <i>handed to</i> the model at generation N — so the model's revision of it is judged by the chip at g<i>N+1</i>.</p>
+   ${legend()}`);
+}
+$("#themeBtn").onclick = () => {
+  const cur = document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  document.documentElement.dataset.theme = cur === "dark" ? "light" : "dark";
+  try { localStorage.setItem("rrv-theme", document.documentElement.dataset.theme); } catch {}
+};
+try { const t = localStorage.getItem("rrv-theme"); if (t) document.documentElement.dataset.theme = t; } catch {}
+
+/* ---------- events ---------- */
+$("#tabs").addEventListener("click", ev => { const b = ev.target.closest("button"); if (b) nav({view:b.dataset.v}); });
+$("#runSeg").addEventListener("click", ev => { const b = ev.target.closest("button[data-run]"); if (b) nav({run:b.dataset.run}); });
+document.addEventListener("click", ev => {
+  const t = ev.target;
+  const open = t.closest("[data-open]");
+  if (open && !t.closest("a[data-act='otherrun']")){
+    const [r, g, gen] = open.dataset.open.split("|"); S.f = resetFilters(); nav({view:"browse", run:r, game:g, gen:+gen}); return;
+  }
+  const a = t.closest("[data-act]");
+  if (a){
+    const act = a.dataset.act;
+    if (act === "bar") return goBrowse(a.dataset.run, {outcomes:[a.dataset.o], gen:a.dataset.gen});
+    if (act === "heat") return goBrowse(S.run, {err:a.dataset.err, gen:a.dataset.gen});
+    if (act === "err") return nav({view:"errors", errSel:a.dataset.err});
+    if (act === "flag") return goBrowse(S.run, {flag:a.dataset.flag});
+    if (act === "trans") return goBrowse(S.run, {outcomes:[a.dataset.from], next:a.dataset.to});
+    if (act === "otherrun") return nav({run:a.dataset.run});
+    if (act === "skill") return nav({view:"skill", skillGen:+a.dataset.sg});
+    if (act === "browseTag") return goBrowse(S.run, {tag:S.notesTag});
+  }
+  // sidebar
+  const fo = t.closest("[data-fo]");
+  if (fo){ const o = fo.dataset.fo, s = S.f.outcomes; s.has(o) ? s.delete(o) : s.add(o); return nav({}, false); }
+  const sc = t.closest("#sidebar .oc[data-gen]");
+  if (sc) return nav({game:sc.dataset.g, gen:+sc.dataset.gen}, false);
+  const gr = t.closest("#sidebar .grow");
+  if (gr) return selectGame(gr.dataset.g);
+  if (t.id === "fclear"){ S.f = resetFilters(); return nav({}, false); }
+  // detail
+  const tl = t.closest("#detail .timeline .oc[data-gen]");
+  if (tl) return nav({gen:+tl.dataset.gen}, false);
+  const om = t.closest("[data-om]");
+  if (om){ S.outMode = om.dataset.om; return renderDetail(run()); }
+  if (t.id === "dockToggle"){ S.dockCollapsed = !S.dockCollapsed; $("#dock").classList.toggle("collapsed", S.dockCollapsed); t.textContent = S.dockCollapsed ? "show ▲" : "hide ▼"; return; }
+  const at = t.closest("[data-addtag]"); if (at) return addTag($("#tagin").dataset.k, at.dataset.addtag);
+  const rt = t.closest("[data-rmtag]"); if (rt) return rmTag($("#tagin").dataset.k, rt.dataset.rmtag);
+  if (t.closest("#tagin") && t.id !== "tagInput") $("#tagInput").focus();
+  // errors
+  const ek = t.closest("[data-ek]"); if (ek) return nav({errSel:ek.dataset.ek}, false);
+  const es = t.closest("[data-es]"); if (es){ S.errScope = es.dataset.es; return renderErrors(); }
+  // notes view
+  const nt = t.closest("[data-ntag]"); if (nt){ S.notesTag = S.notesTag === nt.dataset.ntag ? "" : nt.dataset.ntag; return renderNotes(); }
+  if (t.id === "expMd") return exportMarkdown();
+  if (t.id === "expJson") return download("rule-reasoning-notes.json", JSON.stringify(NOTES, null, 1), "application/json");
+  if (t.id === "impJson") return $("#importFile").click();
+  // skill
+  const sg = t.closest("[data-sg]"); if (sg && S.view === "skill") return nav({skillGen:+sg.dataset.sg}, false);
+});
+document.addEventListener("change", ev => {
+  const t = ev.target, f = S.f;
+  if (t.id === "fdeep"){ f.deep = t.checked; return nav({}, false); }
+  if (["fgen","fnext","ferr","fflag","ftag"].includes(t.id)){ f[t.id.slice(1)] = t.value; return nav({}, false); }
+  if (t.id === "fnoted"){ f.noted = t.checked; return nav({}, false); }
+  if (t.id === "fsort"){ S.sort = t.value; return render(); }
+  if (t.dataset.pane){ S.panes[t.dataset.pane] = t.checked; return renderDetail(run()); }
+  if (t.id === "nrun"){ S.notesRun = t.value; return renderNotes(); }
+  if (t.id === "skillDiff"){ S.skillDiff = t.checked; return renderSkill(); }
+});
+let qTimer = null;
+document.addEventListener("input", ev => {
+  const t = ev.target;
+  if (t.id === "fq"){ clearTimeout(qTimer); qTimer = setTimeout(() => { S.f.q = t.value; nav({}, false); const q=$("#fq"); q.focus(); q.setSelectionRange(q.value.length,q.value.length); }, S.f.deep ? 300 : 80); }
+  if (t.id === "noteText" || t.id === "gameNote"){
+    const k = t.dataset.k, cur = note(k) || {tags:[]};
+    const had = !!note(k);
+    setNote(k, {text:t.value, tags:cur.tags});
+    if (had !== !!note(k)) refreshNoteMarkers();
+  }
+  if (t.id === "nq"){ S.notesQ = t.value; renderNotes(); const q=$("#nq"); q.focus(); q.setSelectionRange(q.value.length,q.value.length); }
+});
+document.addEventListener("keydown", ev => {
+  const t = ev.target;
+  if (t.id === "tagInput"){
+    if (ev.key === "Enter" || ev.key === ","){ ev.preventDefault(); if (t.value.trim()) addTag($("#tagin").dataset.k, t.value); return; }
+    if (ev.key === "Backspace" && !t.value){ const k = $("#tagin").dataset.k, n = note(k); if (n && n.tags.length) rmTag(k, n.tags[n.tags.length-1]); return; }
+  }
+  if (ev.key === "Escape"){
+    if ($("#modal").classList.contains("on")) $("#modal").classList.remove("on");
+    else if (S.view === "play" && PL.sel && !/^(INPUT|TEXTAREA)$/.test(t.tagName)){ PL.sel = null; renderPlay(); }
+    else t.blur && t.blur();
+    return;
+  }
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || ev.ctrlKey || ev.metaKey || ev.altKey) return;
+  const k = ev.key;
+  if (k === "?"){ showHelp(); return; }
+  if ("123456".includes(k) && k.length === 1){ nav({view:["overview","browse","errors","notes","skill","play"][+k-1]}); return; }
+  if (S.view === "play"){
+    if (k === "u"){ playUndo(); return; }
+    if (k === "r"){ playCall("random", {id:PL.id}); return; }
+    return;
+  }
+  if (k === "/"){ ev.preventDefault(); if (S.view !== "browse") nav({view:"browse"}); $("#fq") && $("#fq").focus(); return; }
+  if (S.view !== "browse") return;
+  const r = run();
+  if (k === "ArrowRight" || k === "l" || k === "ArrowLeft" || k === "h"){
+    ev.preventDefault(); const d = (k === "ArrowRight" || k === "l") ? 1 : -1;
+    const i = r.gens.indexOf(S.gen) + d; if (r.gens[i] && r.games[S.game][r.gens[i]]) nav({gen:r.gens[i]}, false); return;
+  }
+  if (k === "ArrowDown" || k === "j" || k === "ArrowUp" || k === "k"){
+    ev.preventDefault(); const list = filteredGames(r); const d = (k === "ArrowDown" || k === "j") ? 1 : -1;
+    const i = list.findIndex(x => x.name === S.game) + d; if (list[i]) selectGame(list[i].name); return;
+  }
+  if (k === "n"){ ev.preventDefault(); if (S.dockCollapsed){ S.dockCollapsed=false; $("#dock").classList.remove("collapsed"); } const ta=$("#noteText"); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); return; }
+  if (k === "t"){ ev.preventDefault(); if (S.dockCollapsed){ S.dockCollapsed=false; $("#dock").classList.remove("collapsed"); } $("#tagInput").focus(); return; }
+  if (k === "d"){ S.outMode = S.outMode === "diff" ? "full" : "diff"; renderDetail(r); return; }
+});
+function selectGame(name){
+  const r = run(), list = filteredGames(r), g = list.find(x => x.name === name);
+  let gen = S.gen;
+  if (g && g.matchGens.length && filtersActive() && !g.matchGens.includes(gen)) gen = g.matchGens[0];
+  if (!r.games[name][gen]) gen = r.gens[0];
+  nav({game:name, gen}, false);
+}
+$("#importFile").addEventListener("change", async ev => {
+  const file = ev.target.files[0]; if (!file) return;
+  try {
+    const j = JSON.parse(await file.text()); let n = 0;
+    for (const [k, v] of Object.entries(j.items || {})){
+      const cur = NOTES.items[k];
+      if (!cur || (v.updated||"") > (cur.updated||"")){ NOTES.items[k] = Object.assign({tags:[]}, v); n++; }
+    }
+    scheduleSave(); renderNotes(); alert(`Imported ${n} notes.`);
+  } catch (e){ alert("Could not import: " + e.message); }
+  ev.target.value = "";
+});
+
+/* ---------- play (SolitaireGDL engine via serve.py) ---------- */
+const PL = {src:null, sgdl:"", edited:false, seed:"", id:null, st:null, err:null, sel:null, last:null, busy:false,
+            solve:null, replay:null, sim:null, engine:null, pending:null, hint:null};
+const RANKCH = {1:"A",10:"T",11:"J",12:"Q",13:"K"};
+const cardSrc = c => c.d ? "cards/1B.svg" : `cards/${RANKCH[c.r] || c.r}${c.s}.svg`;
+const cardName = c => `${({1:"A",11:"J",12:"Q",13:"K"})[c.r] || c.r}${({S:"♠",H:"♥",C:"♣",D:"♦"})[c.s]}`;
+async function api(op, body){
+  const res = await fetch("api/play/" + op, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
+  const j = await res.json().catch(() => ({error:"bad response from server"}));
+  if (!res.ok && !j.error) j.error = "HTTP " + res.status;
+  return j;
+}
+function playSourceEntry(src){
+  const r = run(src.run), e = ent(r, src.game, src.gen);
+  return {r, e, text: src.which === "in" ? e.in : e.out, evalE: src.which === "in" ? e : nextOf(e)};
+}
+function openPlay(src, seed){
+  const {text} = playSourceEntry(src);
+  Object.assign(PL, {src, sgdl:text, edited:false, seed: seed ?? (PL.seed || "0"), sel:null, last:null, solve:null, sim:null, hint:null});
+  stopReplay();
+  S.view = "play"; history.pushState(null, "", toHash());
+  render();
+  playNew();
+}
+async function playNew(seedOverride){
+  if (seedOverride !== undefined) PL.seed = String(seedOverride);
+  PL.busy = true; PL.sel = null; PL.last = null; PL.solve = null; PL.hint = null; stopReplay(); renderPlay();
+  const j = await api("new", {sgdl:PL.sgdl, seed:PL.seed === "" ? null : +PL.seed});
+  PL.busy = false;
+  if (j.error){ PL.err = j.error; PL.st = null; PL.id = null; }
+  else { PL.err = null; PL.st = j; PL.id = j.id; PL.seed = String(j.seed); }
+  history.replaceState(null, "", toHash());
+  renderPlay();
+}
+async function playCall(op, body){
+  if (!PL.id) return;
+  const j = await api(op, body);
+  if (j.error && !j.piles){ PL.last = {ok:false, summary:j.error}; if (/expired/.test(j.error)) PL.id = null; renderPlay(); return j; }
+  PL.st = j; PL.sel = null; PL.hint = null;
+  if ("ok" in j) PL.last = {ok:j.ok, attempted:j.attempted, summary:j.summary || j.error || ""};
+  renderPlay();
+  return j;
+}
+const playAct = a => playCall("act", {id:PL.id, action:a});
+const playUndo = () => playCall("undo", {id:PL.id});
+function stopReplay(){ if (PL.replay){ clearInterval(PL.replay.timer); PL.replay = null; } }
+function startReplay(path){
+  stopReplay();
+  PL.replay = {path, i:0, timer:setInterval(async () => {
+    if (!PL.replay) return;
+    if (PL.replay.i >= PL.replay.path.length || S.view !== "play"){ stopReplay(); renderPlay(); return; }
+    const a = PL.replay.path[PL.replay.i++];
+    const j = await playAct(a);
+    if (!j || j.ok === false) stopReplay();
+  }, 260)};
+  renderPlay();
+}
+function actionFor(sel, destTag){
+  const pile = findPile(sel.pile);
+  const last = pile ? pile.cards.length - 1 : 0;
+  if (sel.pile === "DRAW" || sel.i === last) return `move ${sel.pile} ${destTag}`;
+  return `move_stack ${sel.pile}:${sel.i} ${destTag}`;
+}
+function findPile(tag){
+  if (!PL.st) return null;
+  if (tag === "DRAW") return PL.st.draw ? {cards: PL.st.draw.view || []} : null;
+  const m = tag.match(/^(.*)\[(\d+)\]$/); if (!m) return null;
+  const g = PL.st.piles.find(x => x.name === m[1]); return g ? g.piles.find(p => p.ind === +m[2]) : null;
+}
+function validDests(sel){
+  if (!sel || !PL.st) return new Set();
+  const out = new Set();
+  for (const a of PL.st.actions){
+    const p = a.split(" ");
+    if (p[0] === "move" && p[1] === sel.pile && actionFor(sel, p[2]) === a) out.add(p[2]);
+    if (p[0] === "move_stack" && p[1] === `${sel.pile}:${sel.i}`) out.add(p[2]);
+  }
+  return out;
+}
+function parseAct(a){
+  const p = (a||"").split(" ");
+  if (p[0] === "draw") return {src:"DRAW", dest:null, i:null, draw:true};
+  if (p[0] === "move") return {src:p[1], dest:p[2], i:null};
+  if (p[0] === "move_stack"){ const [s, i] = p[1].split(":"); return {src:s, dest:p[2], i:+i}; }
+  return {};
+}
+function prettyAct(a){
+  const x = parseAct(a); if (x.draw) return "draw";
+  const pile = findPile(x.src); let what = "";
+  if (pile && pile.cards.length){ const cs = x.i == null ? [pile.cards[pile.cards.length-1]] : pile.cards.slice(x.i); what = cs.length > 1 ? `${cardName(cs[0])}…(${cs.length})` : cardName(cs[0]); }
+  return `${what} ${x.src} → ${x.dest}`;
+}
+function explHtml(s){ return esc(s).replace(/\[T\]/g, '<span class="T">[T]</span>').replace(/\[F\]/g, '<span class="F">[F]</span>'); }
+function pileHtml(tag, cards, opts){
+  const cw = opts.cw, down = Math.round(cw*0.14), up = Math.round(cw*0.34), ch = Math.round(cw*1.4);
+  const maxH = opts.maxH;
+  let offs = cards.map(c => c.d ? down : up);
+  const total = offs.slice(0, -1).reduce((a,b)=>a+b, 0);
+  const scale = cards.length > 1 && total + ch > maxH ? (maxH - ch) / total : 1;
+  let y = 0; const tops = cards.map((c,i) => { const t = y; y += offs[i] * scale; return t; });
+  const h = (cards.length ? tops[tops.length-1] : 0) + ch;
+  const sel = PL.sel && PL.sel.pile === tag ? PL.sel.i : null;
+  const hintSrc = PL.hint && PL.hint.src === tag ? (PL.hint.i ?? cards.length-1) : null;
+  const cls = ["pile", opts.dests.has(tag) ? "dest" : "", PL.hint && PL.hint.dest === tag ? "hint" : ""].join(" ");
+  let h2 = `<div class="${cls}" data-ppile="${esc(tag)}" style="height:${h+16}px">`;
+  h2 += `<div class="slot">${cards.length ? "" : "empty"}</div>`;
+  cards.forEach((c, i) => {
+    const s = sel !== null && i >= sel ? "sel" : hintSrc !== null && i >= hintSrc ? "hintsrc" : "";
+    h2 += `<img class="crd ${s}" src="${cardSrc(c)}" style="top:${tops[i]}px" data-pcard="${esc(tag)}" data-i="${i}" alt="${c.d?"face-down card":cardName(c)}" title="${c.d?"face down":cardName(c)} · ${esc(tag)}" draggable="false">`;
+  });
+  h2 += `<div class="tag" style="top:${h+2}px">${esc(tag)} · ${cards.length}</div></div>`;
+  return h2;
+}
+function renderBoard(){
+  const st = PL.st;
+  const maxPiles = Math.max(1, ...st.piles.map(g => g.piles.length));
+  const cw = maxPiles > 14 ? 50 : maxPiles > 10 ? 56 : 66;
+  const dests = validDests(PL.sel);
+  const opts = {cw, dests, maxH: 330};
+  let h = `<div style="--cw:${cw}px">`;
+  if (st.draw){
+    const d = st.draw;
+    const canDraw = st.actions.includes("draw");
+    h += `<div class="drawrow"><div><div class="pile" style="height:${Math.round(cw*1.4)+4}px;cursor:${canDraw?"pointer":"not-allowed"}" data-pdraw="1" title="${canDraw?"Click to draw":"Draw not allowed right now"}">
+        <div class="slot">${d.type==="ROTATE" && !d.back ? (canDraw?"↻ redeal":"empty") : "empty"}</div>
+        ${(d.type==="ROTATE" ? d.back : d.count) ? `<img class="crd ${PL.hint && PL.hint.draw ? "hintsrc":""}" src="cards/1B.svg" style="top:0;${canDraw?"":"filter:grayscale(1) opacity(.6)"}" data-pdraw="1" draggable="false" alt="draw pile">` : ""}</div>
+        <div class="drawinfo">DRAW · ${d.type}<br>${d.type==="ROTATE" ? `${d.back} left · redeals ${d.redeals}/${d.maxRedeals ?? "∞"}` : `${d.count} left → ${esc(d.targets.join(", "))}`}</div></div>`;
+    if (d.type === "ROTATE"){
+      const view = d.view || [];
+      const sel = PL.sel && PL.sel.pile === "DRAW";
+      h += `<div class="pile ${""}" style="width:${cw + Math.max(0, view.length-1)*Math.round(cw*0.3)}px;height:${Math.round(cw*1.4)+4}px">
+        ${view.map((c, i) => `<img class="crd ${sel && i === view.length-1 ? "sel" : PL.hint && PL.hint.src==="DRAW" && i===view.length-1 ? "hintsrc":""}" src="${cardSrc(c)}" style="top:0;left:${i*Math.round(cw*0.3)}px;width:${cw}px" ${i===view.length-1?`data-pcard="DRAW" data-i="${i}"`:""} draggable="false" title="${cardName(c)}">`).join("")}
+        ${view.length ? "" : `<div class="slot">no card turned</div>`}</div>`;
+    }
+    h += `</div>`;
+  }
+  h += `<div class="pgroups">${st.piles.map(g => `<div class="pgroup"><div class="gname">${esc(g.name)} <span class="faint" style="font-weight:400">×${g.piles.length}</span></div>
+     <div class="prow">${g.piles.map(p => pileHtml(`${g.name}[${p.ind}]`, p.cards, opts)).join("")}</div></div>`).join("")}</div></div>`;
+  return h;
+}
+function renderPlay(){
+  const el = $("#v-play");
+  if (PL.pending){ const p = PL.pending; PL.pending = null; openPlay(p.src, p.seed); return; }
+  if (!PL.src){
+    el.innerHTML = `<div class="empty" style="grid-column:1/-1">Nothing loaded. Open a revision in <a data-act="gobrowse">Browse</a> and press <b>▶ Play</b> on either version.</div>`;
+    return;
+  }
+  const {r, e, evalE} = playSourceEntry(PL.src);
+  const st = PL.st;
+  const srcLabel = `${esc(PL.src.game)} · g${PL.src.gen} · ${PL.src.which === "in" ? "version handed to model" : "model's revised version"} · ${esc(r.label)}`;
+  let board = `<div class="ptop"><h2>${esc(st ? st.name : PL.src.game)}</h2>
+     <a class="small" data-pbtn="back" title="Back to this revision in Browse">${srcLabel}</a>${PL.edited ? '<span class="flag">edited</span>' : ""}
+     <span class="spacer" style="flex:1"></span>
+     <span class="small muted">seed</span><input id="pseed" value="${esc(PL.seed)}" title="Deal seed (Enter to deal)">
+     <button class="btn sm" data-pbtn="new" title="Deal again with this seed">Deal</button>
+     <button class="btn sm" data-pbtn="rand" title="Deal with a random seed">New random deal</button>
+     <button class="btn sm" data-pbtn="restart" ${PL.id?"":"disabled"}>Restart</button>
+     <button class="btn sm" data-pbtn="undo" ${st && st.moves ? "" : "disabled"} title="Undo (u)">Undo</button></div>`;
+  if (PL.busy) board += `<div class="muted">Dealing…</div>`;
+  else if (PL.err){
+    const hasTabs = PL.sgdl.includes("\t");
+    board += `<div class="banner err"><b>The SolitaireGDL engine could not compile this file:</b> ${esc(PL.err)}</div>
+      ${e.err && PL.src.which==="in" && !PL.edited ? `<div class="small muted" style="margin-bottom:8px">Logged error from the lab run: <span class="mono">${esc(e.err)}</span></div>` : ""}
+      ${hasTabs ? `<div class="banner warn">This file is indented with tab characters, but the engine only reads 4-space indentation. <button class="btn sm" data-pbtn="detab">Replace tabs with 4 spaces and retry</button></div>` : ""}
+      <div class="small muted">Edit the SGDL in the panel on the right and press <b>Run edited</b> to try a fix.</div>`;
+  } else if (st){
+    board += st.win ? `<div class="winbanner" style="margin-bottom:12px">Won in ${st.moves} moves</div>` : "";
+    board += renderBoard();
+  }
+  // side panel
+  let side = "";
+  if (st && !PL.err){
+    side += `<div class="psec"><div class="small"><b>${st.moves}</b> moves played · <b>${st.actions.length}</b> legal moves now · ${st.cards} cards in play</div>
+      <div class="small muted" style="margin-top:3px">Click a face-up card, then a highlighted pile. Double-click a card to make its first legal move. <kbd>u</kbd> undo · <kbd>r</kbd> random move · <kbd>Esc</kbd> deselect</div></div>`;
+    side += `<div class="psec"><h3>Last attempted move</h3>${PL.last ? `<div class="small" style="margin-bottom:4px">${PL.last.ok ? '<span class="yes">✓ legal</span>' : '<span style="color:var(--o-error);font-weight:700">✕ not legal</span>'} <span class="mono">${esc(PL.last.attempted||"")}</span></div><div class="expl">${explHtml(PL.last.summary)}</div>` : `<div class="small muted">Try a move: the engine will explain which conditions passed [T] or failed [F]. Illegal attempts are explained too.</div>`}</div>`;
+    side += `<div class="psec"><h3>Legal moves (${st.actions.length})</h3>${st.actions.length ? `<div class="alist">${st.actions.map(a => `<div data-pact="${esc(a)}" title="${esc(a)}">${esc(prettyAct(a))}</div>`).join("")}</div>` : `<div class="small" style="color:var(--o-error)">No legal moves — this deal is stuck.</div>`}</div>`;
+    const sv = PL.solve;
+    side += `<div class="psec"><h3>Bot</h3>
+      <div class="frow" style="gap:6px;flex-wrap:wrap"><button class="btn sm" data-pbtn="random" ${st.actions.length?"":"disabled"}>Random move</button>
+      <button class="btn sm" data-pbtn="solve" ${sv && sv.running ? "disabled":""}>${sv && sv.running ? "Searching…" : "Find a win from here"}</button>
+      ${PL.replay ? `<button class="btn sm" data-pbtn="stop">Stop replay</button>` : ""}</div>
+      ${sv && !sv.running ? `<div class="small" style="margin-top:6px">${sv.error ? esc(sv.error) : sv.win ? `<span class="yes">Win found</span> in ${sv.moves} moves (searched ${sv.searched ?? sv.moves} states, ${sv.seconds}s). <a data-pbtn="replay">▶ replay it</a>` : `No win found: ${sv.exhausted ? "<b>every reachable state explored — unwinnable from here</b>" : `stopped at ${esc(sv.reason||"limit")} after ${sv.moves} states`} (${sv.seconds}s).`}</div>` : ""}
+      <div class="small muted" style="margin-top:4px">Depth-first search with repeated-state pruning, capped at 2000 states / 10 s — similar to the lab's bot.</div></div>`;
+  }
+  // simulation
+  const sim = PL.sim;
+  const logged = evalE && evalE.rows && evalE.rows.length ? evalE : null;
+  side += `<div class="psec"><h3>Simulate 10 deals (local engine)</h3>
+    <div class="frow" style="gap:6px"><button class="btn sm ${sim && sim.running ? "" : "primary"}" data-pbtn="sim" ${sim && sim.running ? "disabled":""} style="flex:0 0 auto">${sim && sim.running ? `Running ${sim.rows.length}/10…` : "Run 10 deals"}</button>
+    <span class="small muted">seeds ${esc(PL.seed||0)}–${(+PL.seed||0)+9}, ≤2000 states or 6 s each</span></div>
+    ${sim ? `<table class="simt" style="width:100%;margin-top:6px"><tr><th>Deal</th><th>Local: win</th><th>moves</th><th>exhausted</th>${logged?"<th>Lab: win</th><th>moves</th>":""}</tr>
+      ${Array.from({length:10}, (_, k) => { const x = sim.rows[k], L = logged && logged.rows[k];
+        return `<tr><td>${k+1}</td><td>${x ? (x.error ? "err" : x.win ? '<span class="yes">Win</span>' : "—") : '<span class="faint">…</span>'}</td><td>${x && !x.error ? x.moves : ""}</td><td>${x && !x.error ? (x.exhausted ? "yes" : `<span class="faint">${esc(x.reason||"no")}</span>`) : ""}</td>
+          ${logged ? `<td>${L ? (L[1] ? '<span class="yes">Win</span>' : "—") : ""}</td><td>${L ? L[2] : ""}</td>` : ""}</tr>`; }).join("")}</table>
+      <div class="small" style="margin-top:4px">${sim.error ? `<span style="color:var(--o-error)">${esc(sim.error)}</span>` : `Local: <b>${sim.rows.filter(x=>x.win).length}/${sim.rows.length}</b> won`}${logged ? ` · Lab: <b>${wins(logged)}/10</b> won (different deals, so compare rates, not rows)` : PL.src.which==="out" && !nextOf(e) ? " · this version was never evaluated in the lab run" : ""}</div>` : ""}</div>`;
+  if (st && !PL.err){
+    side += `<details class="psec"><summary class="small" style="cursor:pointer"><b>Win condition</b> ${st.win ? '<span class="yes">met</span>' : '<span class="muted">not met</span>'}</summary><div class="expl" style="margin-top:6px">${explHtml(st.winSummary)}</div></details>`;
+    if (st.description) side += `<details class="psec"><summary class="small" style="cursor:pointer"><b>Rules in plain English</b> (generated by the engine)</summary><div class="md small" style="margin-top:6px">${md(st.description)}</div></details>`;
+    if (st.log && st.log.length) side += `<details class="psec"><summary class="small" style="cursor:pointer"><b>Move log</b> (${st.moves})</summary><div class="alist" style="margin-top:6px">${st.log.map((a,i)=>`<div style="cursor:default">${i+1}. ${esc(a)}</div>`).join("")}</div></details>`;
+  }
+  side += `<details class="psec" ${PL.err || PL.edited ? "open" : ""}><summary class="small" style="cursor:pointer"><b>SGDL</b> — edit and re-run</summary>
+    <textarea class="sgdled" id="sgdlEd" spellcheck="false">${esc(PL.sgdl)}</textarea>
+    <div class="frow" style="gap:6px;margin-top:6px;flex-wrap:wrap"><button class="btn sm primary" data-pbtn="runed" style="flex:0 0 auto">Run edited</button>
+    <button class="btn sm" data-pbtn="detab" style="flex:0 0 auto">Tabs → 4 spaces</button>
+    <button class="btn sm" data-pbtn="reset" style="flex:0 0 auto" ${PL.edited?"":"disabled"}>Reset to logged version</button></div></details>`;
+  if (PL.engine && !PL.engine.ok) side = `<div class="banner err">${esc(PL.engine.error)}</div>` + side;
+  // preserve editor text / scroll while re-rendering
+  const ed = $("#sgdlEd"), edVal = ed ? ed.value : null, sideScroll = el.querySelector(".pside") ? el.querySelector(".pside").scrollTop : 0;
+  const boardScroll = el.querySelector(".board") ? el.querySelector(".board").scrollTop : 0;
+  el.innerHTML = `<div class="board">${board}</div><div class="pside">${side}</div>`;
+  if (edVal !== null && edVal !== PL.sgdl && $("#sgdlEd")) $("#sgdlEd").value = edVal;
+  el.querySelector(".pside").scrollTop = sideScroll; el.querySelector(".board").scrollTop = boardScroll;
+}
+async function runSim(){
+  const base = +PL.seed || 0;
+  PL.sim = {running:true, rows:[]}; renderPlay();
+  for (let k = 0; k < 10; k++){
+    const j = await api("simulate", {sgdl:PL.sgdl, seed:base + k, maxMoves:2000, timeLimit:6});
+    if (j.error && !("win" in j)){ PL.sim.error = j.error; break; }
+    PL.sim.rows.push(j);
+    if (S.view === "play") renderPlay();
+  }
+  PL.sim.running = false; renderPlay();
+}
+document.addEventListener("click", async ev => {
+  const t = ev.target;
+  const pb = t.closest("[data-play]");
+  if (pb && S.view === "browse"){ openPlay({run:S.run, game:S.game, gen:S.gen, which:pb.dataset.play}); return; }
+  if (t.closest("[data-act='gobrowse']")){ nav({view:"browse"}); return; }
+  if (!t.closest("#v-play")) return;
+  const b = t.closest("[data-pbtn]");
+  if (b){
+    const k = b.dataset.pbtn;
+    if (k === "new"){ const v = $("#pseed").value.trim(); return playNew(v === "" ? "0" : v); }
+    if (k === "rand") return playNew(String(Math.floor(Math.random()*100000)));
+    if (k === "restart"){ stopReplay(); PL.last = null; PL.solve = null; return playCall("restart", {id:PL.id}); }
+    if (k === "undo"){ stopReplay(); return playUndo(); }
+    if (k === "random") return playCall("random", {id:PL.id});
+    if (k === "stop"){ stopReplay(); return renderPlay(); }
+    if (k === "back"){ const s = PL.src; S.f = resetFilters(); return nav({view:"browse", run:s.run, game:s.game, gen:s.gen}); }
+    if (k === "solve"){ PL.solve = {running:true}; renderPlay(); const j = await api("solve", {id:PL.id, maxMoves:2000, timeLimit:10}); PL.solve = j; renderPlay(); return; }
+    if (k === "replay"){ if (PL.solve && PL.solve.path) startReplay(PL.solve.path.slice()); return; }
+    if (k === "sim") return runSim();
+    if (k === "detab"){ const ed = $("#sgdlEd"); const v = (ed ? ed.value : PL.sgdl).replace(/\t/g, "    "); PL.sgdl = v; PL.edited = true; PL.sim = null; return playNew(); }
+    if (k === "runed"){ PL.sgdl = $("#sgdlEd").value; PL.edited = true; PL.sim = null; return playNew(); }
+    if (k === "reset"){ PL.sgdl = playSourceEntry(PL.src).text; PL.edited = false; PL.sim = null; return playNew(); }
+    return;
+  }
+  if (PL.replay) return;
+  const pa = t.closest("[data-pact]"); if (pa) return playAct(pa.dataset.pact);
+  if (t.closest("[data-pdraw]")) return playAct("draw");
+  if (!PL.st || PL.st.win) return;
+  const card = t.closest("[data-pcard]");
+  const pileEl = t.closest("[data-ppile]");
+  const tag = card ? card.dataset.pcard : pileEl ? pileEl.dataset.ppile : null;
+  if (!tag) { if (PL.sel){ PL.sel = null; renderPlay(); } return; }
+  if (PL.sel && PL.sel.pile !== tag){ return playAct(actionFor(PL.sel, tag)); }
+  if (card){
+    const i = +card.dataset.i, pile = findPile(tag);
+    if (pile.cards[i].d){ PL.last = {ok:false, attempted:"", summary:"That card is face down — only face-up cards can be moved."}; PL.sel = null; return renderPlay(); }
+    PL.sel = PL.sel && PL.sel.pile === tag && PL.sel.i === i ? null : {pile:tag, i};
+    return renderPlay();
+  }
+  PL.sel = null; renderPlay();
+});
+document.addEventListener("dblclick", ev => {
+  const card = ev.target.closest("#v-play [data-pcard]"); if (!card || !PL.st) return;
+  const sel = {pile:card.dataset.pcard, i:+card.dataset.i};
+  const dests = [...validDests(sel)];
+  if (dests.length) playAct(actionFor(sel, dests[0]));
+});
+document.addEventListener("mouseover", ev => {
+  const pa = ev.target.closest("#v-play [data-pact]");
+  const want = pa ? parseAct(pa.dataset.pact) : null;
+  if (JSON.stringify(want) === JSON.stringify(PL.hint)) return;
+  PL.hint = want;
+  // light-weight re-highlight without re-rendering the side panel
+  document.querySelectorAll("#v-play .hint").forEach(x => x.classList.remove("hint"));
+  document.querySelectorAll("#v-play .hintsrc").forEach(x => x.classList.remove("hintsrc"));
+  if (!want) return;
+  if (want.draw){ const d = $("#v-play img[data-pdraw]"); d && d.classList.add("hintsrc"); return; }
+  const dp = document.querySelector(`#v-play .pile[data-ppile="${CSS.escape(want.dest)}"]`); dp && dp.classList.add("hint");
+  const cards = [...document.querySelectorAll(`#v-play [data-pcard="${CSS.escape(want.src)}"]`)];
+  const from = want.i ?? (cards.length - 1);
+  cards.filter(c => +c.dataset.i >= from).forEach(c => c.classList.add("hintsrc"));
+});
+document.addEventListener("keydown", ev => { if (ev.target.id === "pseed" && ev.key === "Enter"){ playNew(ev.target.value.trim() || "0"); } });
+
+/* ---------- boot ---------- */
+(async function boot(){
+  try {
+    const res = await fetch("data.json");
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    D = await res.json();
+  } catch (e){
+    document.querySelector("main").innerHTML = `<div class="empty"><h2>Couldn't load data.json</h2><p>Start the viewer with <code>python serve.py</code> from the <code>viewer</code> folder (opening index.html directly from disk can't read the data file).</p><p class="small muted">${esc(e.message)}</p></div>`;
+    $("#saveState").textContent = "";
+    return;
+  }
+  for (const r of D.runs) for (const name in r.games) for (const gen in r.games[name]) Object.assign(r.games[name][gen], {name, gen:+gen, run:r.key});
+  S.run = D.runs[0].key;
+  await loadNotes();
+  try { PL.engine = await (await fetch("api/play/status")).json(); } catch { PL.engine = {ok:false, error:"Play needs the viewer server (python serve.py)."}; }
+  fromHash();
+  render();
+})();
+</script>
+</body>
+</html>
