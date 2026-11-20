@@ -11,8 +11,11 @@ import json
 import os
 import re
 import shutil
+import signal
 import socketserver
+import subprocess
 import sys
+import time
 import webbrowser
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -21,6 +24,21 @@ import player_api  # noqa: E402  (SGDL engine bridge; engine itself is imported 
 
 NOTES = os.path.join(HERE, "notes.json")
 DATA = os.path.join(HERE, "data.json")
+
+
+def _pid_running(pid) -> bool:
+    """True if a process with this pid exists (never signals it: os.kill(pid, 0) terminates on Windows)."""
+    if not pid:
+        return False
+    if os.name == "nt":
+        out = subprocess.run(["tasklist", "/FI", f"PID eq {int(pid)}", "/NH", "/FO", "CSV"],
+                             capture_output=True, text=True).stdout
+        return f'"{int(pid)}"' in out
+    try:
+        os.kill(int(pid), 0)
+        return True
+    except OSError:
+        return False
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -74,6 +92,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def do_POST(self):
         if self.path.startswith("/api/play/"):
             return self._play(self.path.split("?")[0].rsplit("/", 1)[-1])
+        if self.path.startswith("/api/bench/"):
+            return self._bench(self.path.split("?")[0].rsplit("/", 1)[-1])
         if not self.path.startswith("/api/notes"):
             return self._json(404, {"error": "not found"})
         n = int(self.headers.get("Content-Length", 0))
@@ -90,6 +110,41 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         os.replace(tmp, NOTES)
         print(f"saved {len(obj['items'])} notes -> notes.json")
         return self._json(200, {"ok": True, "count": len(obj["items"])})
+
+    def _bench(self, op):
+        """Start/resume or stop bench/bench.py as a detached process (it outlives this server)."""
+        n = int(self.headers.get("Content-Length", 0))
+        b = json.loads(self.rfile.read(n).decode("utf-8") or "{}") if n else {}
+        status_fp = os.path.join(HERE, "bench", "status.json")
+        st = {}
+        if os.path.exists(status_fp):
+            with open(status_fp, encoding="utf-8") as f:
+                st = json.load(f)
+        alive = st.get("state") in ("starting", "running") and (
+            time.time() - st.get("updated", 0) < 30 or _pid_running(st.get("pid")))
+        if op == "start":
+            if alive:
+                return self._json(409, {"error": "benchmark is already running"})
+            cmd = [sys.executable, os.path.join(HERE, "bench", "bench.py"), "--time", str(float(b.get("time", 60)))]
+            if b.get("fresh"):
+                cmd.append("--fresh")
+            flags = 0x00000008 | 0x00000200 if os.name == "nt" else 0  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+            log = open(os.path.join(HERE, "bench", "bench.log"), "a", encoding="utf-8")
+            subprocess.Popen(cmd, cwd=os.path.join(HERE, "bench"), stdout=log, stderr=log, stdin=subprocess.DEVNULL,
+                             creationflags=flags, start_new_session=os.name != "nt")
+            return self._json(200, {"ok": True})
+        if op == "stop":
+            if not alive:
+                return self._json(200, {"ok": True, "note": "not running"})
+            try:
+                os.kill(int(st["pid"]), signal.SIGTERM)
+            except Exception as e:  # noqa: BLE001
+                return self._json(500, {"error": f"could not stop pid {st.get('pid')}: {e}"})
+            st.update(state="stopped", updated=time.time())
+            with open(status_fp, "w", encoding="utf-8") as f:
+                json.dump(st, f)
+            return self._json(200, {"ok": True})
+        return self._json(404, {"error": f"unknown bench op {op}"})
 
     def _play(self, op):
         n = int(self.headers.get("Content-Length", 0))
@@ -112,7 +167,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             elif op == "random":
                 res = P.random_move(b["id"])
             elif op == "solve":
-                res = P.solve_session(b["id"], int(b.get("maxMoves", 2000)), float(b.get("timeLimit", 10)))
+                algo = b.get("algo")
+                if algo is not None and algo not in P.SOLVERS:
+                    return self._json(400, {"error": f"unknown solver {algo}"})
+                res = P.solve_session(b["id"], int(b.get("maxMoves", 2000)), float(b.get("timeLimit", 10)), bool(b.get("speed")), algo)
             elif op == "simulate":
                 res = P.simulate_deal(b["sgdl"], seed or 0, int(b.get("maxMoves", 2000)), float(b.get("timeLimit", 6)))
             else:

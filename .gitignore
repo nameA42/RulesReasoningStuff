@@ -1,0 +1,20 @@
+# Python caches
+__pycache__/
+*.pyc
+
+# Logs from the viewer server and the bot race
+*.log
+
+# Bot race: live progress file, pre-backfill backups (git history covers them), and the copy of
+# SolitaireGDL origin/main that bench.py exports automatically on first run
+viewer/bench/status.json
+viewer/bench/results.before-*.jsonl
+viewer/bench/.labengine/
+
+# Fawon C++ core build outputs (build per machine: python viewer/fawon/native.py build)
+viewer/fawon/core/*.dll
+viewer/fawon/core/*.so
+viewer/fawon/core/*.dylib
+viewer/fawon/core/*.obj
+viewer/fawon/core/*.exp
+viewer/fawon/core/*.lib
